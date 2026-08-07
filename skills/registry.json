@@ -1,0 +1,10 @@
+{
+  "skills": {
+    "nation-tools": {
+      "path": "/root/.kiro/skills/nation-tools/SKILL.md",
+      "description": "Complete reference for all NATION AGENT tool modules. Use when the agent needs to perform file opera",
+      "source": "local",
+      "added": "2026-08-07T10:08:18"
+    }
+  }
+}

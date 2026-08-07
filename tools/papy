@@ -90,6 +90,25 @@ case "$CMD" in
   config|cfg) shift; exec "$TOOLS/nation-config.sh" "$@" ;;
   speech|tts) shift; exec "$TOOLS/nation-speech.sh" "$@" ;;
   voice)      shift; exec "$TOOLS/nation-voice.sh" "$@" ;;
+  clawhub|claw)   shift; exec "$TOOLS/nation-clawhub.sh" "$@" ;;
+  appdeploy|deploy) shift; exec "$TOOLS/nation-appdeploy.sh" "$@" ;;
+  session|sess)
+    shift
+    PERSIST="$TOOLS/nation-persist.sh"
+    if [ ! -x "$PERSIST" ]; then
+        echo "nation-persist.sh not found. Run: papy update"
+        exit 1
+    fi
+    SUB="${1:-status}"
+    case "$SUB" in
+      attach|start|resume) exec "$PERSIST" start ;;
+      detach|bg)           exec "$PERSIST" detach ;;
+      stop|kill)           exec "$PERSIST" stop ;;
+      restart)             exec "$PERSIST" restart ;;
+      logs)                exec "$PERSIST" logs ;;
+      status|*)            exec "$PERSIST" status ;;
+    esac
+    ;;
   tool)
     shift
     TOOL_NAME="${1:-}"
@@ -118,10 +137,13 @@ case "$CMD" in
 Usage: papy [command]
 
   (none)           Launch agent (Ollama + autosave + voice auto-start)
+  session [cmd]    Session persistence (attach/detach/status/stop)
   tui              TUI with keyboard navigation
   web [port]       Web dashboard (auto port-switch)
   status           Full system status
   health           Health check
+  clawhub [cmd]    ClawHub skill marketplace (search/browse/install)
+  appdeploy [cmd]  Deploy web apps via AppDeploy (deploy/list/status)
   ollama [cmd]     Ollama model manager
   voice [cmd]      Voice listener + wake word
   speech [cmd]     TTS / text-to-speech
