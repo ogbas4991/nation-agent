@@ -36,7 +36,7 @@ command -v node   &>/dev/null && ok "node"   || warn "node not found — install
 
 # ── Directories ───────────────────────────────────────────────────────────
 sec "Creating directories"
-for d in agents hooks tools prompts "skills/nation-tools" memory logs lib web build; do
+for d in agents hooks tools prompts "skills/nation-tools" memory logs lib web build auto; do
     mkdir -p "$KIRO/$d"
 done
 ok "Directories under $KIRO/"
@@ -61,7 +61,8 @@ done
 for t in nation-file nation-shell nation-git nation-search nation-python \
           nation-sqlite nation-browser nation-http nation-docker nation-ssh \
           nation-rest nation-memory nation-heal nation-adb nation-apk \
-          nation-banner nation-skills nation-tui nation-web nation-apk-app; do
+          nation-banner nation-skills nation-tui nation-web nation-apk-app \
+          nation-ollama nation-suggest nation-github nation-shizuku nation-auto; do
     dl "tools/${t}.sh" "$KIRO/tools/${t}.sh"
 done
 dl "tools/papy" "$KIRO/tools/papy"
