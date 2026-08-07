@@ -64,7 +64,8 @@ for t in nation-file nation-shell nation-git nation-search nation-python \
           nation-banner nation-skills nation-tui nation-web nation-apk-app \
           nation-ollama nation-suggest nation-github nation-shizuku nation-auto \
           nation-deps nation-autosave nation-launch nation-msg nation-device \
-          nation-config nation-speech nation-voice; do
+          nation-config nation-speech nation-voice \
+          nation-persist nation-clawhub nation-appdeploy; do
     dl "tools/${t}.sh" "$KIRO/tools/${t}.sh"
 done
 dl "tools/papy" "$KIRO/tools/papy"
@@ -142,13 +143,15 @@ echo -e "${BOLD}║   ⚡ NATION AGENT v3 — Install Complete!     ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 echo "Usage:"
-echo "  papy              Launch agent (kiro-cli)"
-echo "  papy tui          Terminal UI"
-echo "  papy web          Web dashboard (localhost:7070)"
-echo "  papy health       Health check"
-echo "  papy status       Full status"
+echo "  papy                    Launch agent"
+echo "  papy tui                Terminal UI"
+echo "  papy web                Web dashboard"
+echo "  papy session attach     Rejoin running session"
+echo "  papy clawhub browse     Browse ClawHub skills"
+echo "  papy appdeploy setup    Setup AppDeploy deployment"
+echo "  papy health             Health check"
 echo ""
-echo "Activate in Kiro: /agent nation-agent  or  Ctrl+Shift+N"
+echo "  Ctrl+B D = detach session  |  Ctrl+B 1 = papy window"
 echo ""
 echo "GitHub: https://github.com/ogbas4991/nation-agent"
 echo ""
