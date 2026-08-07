@@ -1,17 +1,12 @@
 #!/bin/bash
-# NATION AGENT — papy launcher v4
-# Main entry point. Starts Ollama, auto-switches ports, launches agent.
-#
-# Usage: papy [command] [args...]
+# NATION AGENT — papy launcher v5
 NATION_DIR="${HOME}/.kiro"
 TOOLS="${NATION_DIR}/tools"
 LIB="${NATION_DIR}/lib"
-
 [ -f "$LIB/nation-platform.sh" ] && source "$LIB/nation-platform.sh" 2>/dev/null || true
 
 CMD="${1:-}"
 
-# ── Auto port-finder (used by web/api servers) ────────────────────────────
 find_free_port() {
     local port="${1:-7070}"
     while ss -tlnp 2>/dev/null | grep -q ":$port " || \
@@ -22,30 +17,45 @@ find_free_port() {
     echo "$port"
 }
 
-# ── Start Ollama in background (non-blocking) ─────────────────────────────
-start_ollama_bg() {
+start_bg_services() {
+    # 1. Ollama
     if [ -x "$TOOLS/nation-ollama.sh" ]; then
-        # Only print if not already running
-        if ! curl -sf http://localhost:$(cat "$NATION_DIR/ollama.port" 2>/dev/null || echo 11434)/api/tags >/dev/null 2>&1; then
-            echo "Starting Ollama in background..."
+        curl -sf "http://localhost:$(cat "$NATION_DIR/ollama.port" 2>/dev/null || echo 11434)/api/tags" \
+            >/dev/null 2>&1 || {
             "$TOOLS/nation-ollama.sh" auto >/dev/null 2>&1 &
-        fi
+        }
     fi
-}
-
-# ── Shizuku/ADB check (non-blocking) ─────────────────────────────────────
-check_wireless() {
-    if [ -x "$TOOLS/nation-shizuku.sh" ]; then
+    # 2. AutoSave
+    if [ -x "$TOOLS/nation-autosave.sh" ]; then
+        "$TOOLS/nation-autosave.sh" status 2>/dev/null | grep -q "RUNNING" || \
+            "$TOOLS/nation-autosave.sh" start >/dev/null 2>&1 &
+    fi
+    # 3. Shizuku/ADB
+    [ -x "$TOOLS/nation-shizuku.sh" ] && \
         "$TOOLS/nation-shizuku.sh" auto >/dev/null 2>&1 &
+    # 4. Voice listener (if enabled)
+    if [ -x "$TOOLS/nation-config.sh" ] && [ -x "$TOOLS/nation-voice.sh" ]; then
+        VOICE_EN=$("$TOOLS/nation-config.sh" get voice.enabled 2>/dev/null || echo "false")
+        [ "$VOICE_EN" = "true" ] && {
+            "$TOOLS/nation-voice.sh" status 2>/dev/null | grep -q "RUNNING" || \
+                "$TOOLS/nation-voice.sh" listen >/dev/null 2>&1 &
+        }
+    fi
+    # 5. Telegram bot (if configured)
+    if [ -x "$TOOLS/nation-config.sh" ] && [ -x "$TOOLS/nation-msg.sh" ]; then
+        TG_EN=$("$TOOLS/nation-config.sh" get messaging.telegram 2>/dev/null || echo "false")
+        [ "$TG_EN" = "true" ] && \
+            "$TOOLS/nation-msg.sh" telegram bot >/dev/null 2>&1 &
     fi
 }
 
 case "$CMD" in
   "")
-    # Full launch sequence
     "$TOOLS/nation-banner.sh" full 2>/dev/null || true
-    start_ollama_bg
-    check_wireless
+    start_bg_services
+    # TTS welcome
+    [ -x "$TOOLS/nation-speech.sh" ] && \
+        "$TOOLS/nation-speech.sh" welcome >/dev/null 2>&1 &
     if command -v kiro-cli &>/dev/null; then
         exec kiro-cli chat --agent nation-agent
     else
@@ -53,25 +63,33 @@ case "$CMD" in
         exec "$TOOLS/nation-tui.sh"
     fi
     ;;
-  tui)       shift; exec "$TOOLS/nation-tui.sh" "$@" ;;
+  tui)        shift; exec "$TOOLS/nation-tui.sh" "$@" ;;
   web)
     shift
     PORT=$(find_free_port "${1:-7070}")
     [ "$PORT" != "${1:-7070}" ] && echo "Port ${1:-7070} busy — using $PORT"
     exec "$TOOLS/nation-web.sh" "$PORT"
     ;;
-  banner)    shift; exec "$TOOLS/nation-banner.sh" "${1:-full}" ;;
-  health)    exec "$TOOLS/nation-heal.sh" check ;;
+  banner)     shift; exec "$TOOLS/nation-banner.sh" "${1:-full}" ;;
+  health)     exec "$TOOLS/nation-heal.sh" check ;;
   memory|mem) shift; exec "$TOOLS/nation-memory.sh" "$@" ;;
   skills|skill) shift; exec "$TOOLS/nation-skills.sh" "$@" ;;
-  heal)      shift; exec "$TOOLS/nation-heal.sh" "$@" ;;
-  ollama)    shift; exec "$TOOLS/nation-ollama.sh" "$@" ;;
-  adb)       shift; exec "$TOOLS/nation-adb.sh" "$@" ;;
-  apk)       shift; exec "$TOOLS/nation-apk.sh" "$@" ;;
-  github|gh) shift; exec "$TOOLS/nation-github.sh" "$@" ;;
-  shizuku)   shift; exec "$TOOLS/nation-shizuku.sh" "$@" ;;
-  auto)      shift; exec "$TOOLS/nation-auto.sh" "$@" ;;
-  suggest)   shift; exec "$TOOLS/nation-suggest.sh" "$@" ;;
+  heal)       shift; exec "$TOOLS/nation-heal.sh" "$@" ;;
+  ollama)     shift; exec "$TOOLS/nation-ollama.sh" "$@" ;;
+  adb)        shift; exec "$TOOLS/nation-adb.sh" "$@" ;;
+  apk)        shift; exec "$TOOLS/nation-apk.sh" "$@" ;;
+  github|gh)  shift; exec "$TOOLS/nation-github.sh" "$@" ;;
+  shizuku)    shift; exec "$TOOLS/nation-shizuku.sh" "$@" ;;
+  auto)       shift; exec "$TOOLS/nation-auto.sh" "$@" ;;
+  suggest)    shift; exec "$TOOLS/nation-suggest.sh" "$@" ;;
+  deps)       shift; exec "$TOOLS/nation-deps.sh" "$@" ;;
+  save)       shift; exec "$TOOLS/nation-autosave.sh" "${@:-save}" ;;
+  launch)     shift; exec "$TOOLS/nation-launch.sh" "$@" ;;
+  msg)        shift; exec "$TOOLS/nation-msg.sh" "$@" ;;
+  device)     shift; exec "$TOOLS/nation-device.sh" "$@" ;;
+  config|cfg) shift; exec "$TOOLS/nation-config.sh" "$@" ;;
+  speech|tts) shift; exec "$TOOLS/nation-speech.sh" "$@" ;;
+  voice)      shift; exec "$TOOLS/nation-voice.sh" "$@" ;;
   tool)
     shift
     TOOL_NAME="${1:-}"
@@ -86,34 +104,44 @@ case "$CMD" in
     echo ""
     "$TOOLS/nation-heal.sh" check 2>/dev/null
     echo ""
-    echo "Ollama:" && "$TOOLS/nation-ollama.sh" status 2>/dev/null || echo "  not available"
+    echo "Ollama  :" && "$TOOLS/nation-ollama.sh" status 2>/dev/null || echo "  n/a"
+    echo "AutoSave:" && "$TOOLS/nation-autosave.sh" status 2>/dev/null | head -1 || echo "  n/a"
+    echo "Voice   :" && "$TOOLS/nation-voice.sh" status 2>/dev/null | head -1 || echo "  n/a"
     ;;
   update)
     curl -fsSL https://raw.githubusercontent.com/ogbas4991/nation-agent/main/install.sh | bash
     ;;
   help|--help|-h)
     "$TOOLS/nation-banner.sh" minimal 2>/dev/null || true
-    echo ""
     cat << 'HELP'
+
 Usage: papy [command]
 
-  (none)          Launch NATION AGENT (kiro-cli + Ollama auto-start)
-  tui             Terminal UI with keyboard navigation
-  web [port]      Web dashboard (auto port-switch if busy)
-  status          Full system status
-  health          Health check
-  ollama [cmd]    Ollama model manager
-  memory [cmd]    Persistent memory
-  skills [cmd]    Skill registry
-  github [cmd]    GitHub auth & operations
-  shizuku [cmd]   Shizuku/ADB wireless
-  auto [cmd]      24/7 autonomous agent runner
-  suggest         Follow-up task suggestions
-  adb [cmd]       ADB device tools
-  apk [cmd]       APK build/deploy
-  heal [cmd]      Self-healing diagnostics
-  tool <name>     Run any nation-* tool
-  update          Update from GitHub
+  (none)           Launch agent (Ollama + autosave + voice auto-start)
+  tui              TUI with keyboard navigation
+  web [port]       Web dashboard (auto port-switch)
+  status           Full system status
+  health           Health check
+  ollama [cmd]     Ollama model manager
+  voice [cmd]      Voice listener + wake word
+  speech [cmd]     TTS / text-to-speech
+  config [cmd]     Agent behavior configuration
+  device [cmd]     Device control (brightness, volume, WiFi, camera...)
+  launch [cmd]     Open URLs, apps, files
+  msg [cmd]        Telegram + WhatsApp messaging
+  deps [cat]       Auto-install missing dependencies
+  save             Auto-save now
+  memory [cmd]     Persistent memory
+  skills [cmd]     Skill registry
+  github [cmd]     GitHub auth & operations
+  shizuku [cmd]    ADB wireless / Shizuku
+  auto [cmd]       24/7 autonomous task runner
+  suggest [--pick] Follow-up suggestions (--pick to run interactively)
+  adb [cmd]        ADB device tools
+  apk [cmd]        APK build/deploy
+  heal [cmd]       Self-healing diagnostics
+  tool <name>      Run any nation-* tool directly
+  update           Update from GitHub
 HELP
     ;;
   *) echo "Unknown: $CMD. Run: papy help"; exit 1 ;;

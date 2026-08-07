@@ -1,90 +1,81 @@
 #!/bin/bash
-# NATION AGENT — agentSpawn hook v4
-set -euo pipefail
+# NATION AGENT — agentSpawn hook v5
+set -uo pipefail
 source "$HOME/.kiro/lib/nation-platform.sh" 2>/dev/null || true
 
 TOOLS="${NATION_TOOLS:-$HOME/.kiro/tools}"
 MEMORY="$TOOLS/nation-memory.sh"
 SKILLS="$TOOLS/nation-skills.sh"
 OLLAMA="$TOOLS/nation-ollama.sh"
-SHIZUKU="$TOOLS/nation-shizuku.sh"
+SPEECH="$TOOLS/nation-speech.sh"
+AUTOSAVE="$TOOLS/nation-autosave.sh"
 SUGGEST="$TOOLS/nation-suggest.sh"
+CONFIG="$TOOLS/nation-config.sh"
 LOG="${NATION_LOGS:-$HOME/.kiro/logs}/nation-agent.log"
 mkdir -p "$(dirname "$LOG")"
-
 TS=$(date '+%Y-%m-%d %H:%M:%S')
 SESSION="${KIRO_SESSION_ID:-unknown}"
-echo "[$TS] [SPAWN] v4 Session=$SESSION Platform=${NATION_PLATFORM:-?} CWD=$PWD" >> "$LOG"
+echo "[$TS] [SPAWN] v5 Session=$SESSION Platform=${NATION_PLATFORM:-?} CWD=$PWD" >> "$LOG"
 
 # ── Banner ────────────────────────────────────────────────────────────────
 [ -x "$TOOLS/nation-banner.sh" ] && "$TOOLS/nation-banner.sh" full 2>/dev/null || true
 
-# ── Platform info ─────────────────────────────────────────────────────────
+# ── Info ──────────────────────────────────────────────────────────────────
 echo ""
-echo "Platform : ${NATION_PLATFORM:-unknown}  |  $(uname -m)  |  $(date '+%H:%M:%S')"
+echo "Platform : ${NATION_PLATFORM:-unknown}  $(uname -m)  $(date '+%H:%M:%S')"
 echo "CWD      : $PWD"
+git rev-parse --is-inside-work-tree &>/dev/null 2>&1 && \
+    echo "Git      : $(git branch --show-current 2>/dev/null) ($(git status --short 2>/dev/null | wc -l | tr -d ' ') changes) — $(git log --oneline -1 2>/dev/null)"
 
-# ── Git context ───────────────────────────────────────────────────────────
-if git rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
-    BRANCH=$(git branch --show-current 2>/dev/null || echo "detached")
-    CHANGES=$(git status --short 2>/dev/null | wc -l | tr -d ' ')
-    LAST=$(git log --oneline -1 2>/dev/null || echo "no commits")
-    echo "Git      : $BRANCH ($CHANGES changed) — $LAST"
-fi
-
-# ── Runtimes ──────────────────────────────────────────────────────────────
+# ── Background services (non-blocking) ────────────────────────────────────
 echo ""
-echo "=== Runtimes ==="
-for bin in python3 node git curl ollama; do
-    if command -v "$bin" &>/dev/null; then
-        VER=$({ "$bin" --version 2>&1 || true; } | head -1 | cut -c1-35)
-        echo "  ✓ $bin — $VER"
-    else
-        echo "  ✗ $bin"
-    fi
-done
+echo "=== Starting services ==="
 
-# ── Start Ollama in background ────────────────────────────────────────────
-echo ""
-echo "=== Ollama ==="
+# Ollama
 if [ -x "$OLLAMA" ]; then
-    if "$OLLAMA" status 2>/dev/null | grep -q "RUNNING"; then
-        PORT=$(cat "${NATION_DIR:-$HOME/.kiro}/ollama.port" 2>/dev/null || echo 11434)
-        echo "  ● Running on port $PORT"
-    else
-        echo "  Starting Ollama in background..."
+    curl -sf "http://localhost:$(cat "${NATION_DIR:-$HOME/.kiro}/ollama.port" 2>/dev/null || echo 11434)/api/tags" \
+        >/dev/null 2>&1 && echo "  ✓ Ollama running" || {
         "$OLLAMA" auto >/dev/null 2>&1 &
-        echo "  ○ Starting... (use 'papy ollama status' to check)"
+        echo "  ○ Ollama starting..."
+    }
+fi
+
+# AutoSave
+if [ -x "$AUTOSAVE" ]; then
+    "$AUTOSAVE" status 2>/dev/null | grep -q "RUNNING" && \
+        echo "  ✓ AutoSave active" || {
+        "$AUTOSAVE" start >/dev/null 2>&1 &
+        echo "  ○ AutoSave starting..."
+    }
+fi
+
+# Voice listener
+if [ -x "$CONFIG" ] && [ -x "$TOOLS/nation-voice.sh" ]; then
+    VOICE_EN=$("$CONFIG" get voice.enabled 2>/dev/null || echo "false")
+    if [ "$VOICE_EN" = "true" ]; then
+        "$TOOLS/nation-voice.sh" status 2>/dev/null | grep -q "RUNNING" && \
+            echo "  ✓ Voice listener active" || {
+            "$TOOLS/nation-voice.sh" listen >/dev/null 2>&1 &
+            echo "  ○ Voice listener starting..."
+        }
+        WAKE=$("$CONFIG" get agent.wake_word 2>/dev/null || echo "hey papy")
+        echo "    Wake word: '$WAKE'"
+    else
+        echo "  ○ Voice: disabled (papy config set voice.enabled true to enable)"
     fi
-else
-    echo "  Ollama tool not found"
 fi
 
-# ── Shizuku / ADB wireless check (non-blocking) ───────────────────────────
-echo ""
-echo "=== Connectivity ==="
-if [ -x "$SHIZUKU" ]; then
-    "$SHIZUKU" auto >/dev/null 2>&1 &
-    SHIZUKU_STATUS=$("$SHIZUKU" status 2>/dev/null | head -3 || echo "checking...")
-    echo "$SHIZUKU_STATUS" | head -3
-else
-    echo "  ADB/Shizuku tools not found"
-fi
-
-# ── Skills auto-scan ──────────────────────────────────────────────────────
+# ── Skills ────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Skills ==="
 if [ -x "$SKILLS" ]; then
-    NEW=$("$SKILLS" scan 2>/dev/null | grep "Registered:" | wc -l | tr -d ' ')
+    NEW=$("$SKILLS" scan 2>/dev/null | grep -c "Registered:" 2>/dev/null || echo "0")
     TOTAL=$(python3 -c "
 import json,os
 r=os.path.expanduser('~/.kiro/skills/registry.json')
 try: d=json.load(open(r)); print(len(d.get('skills',{})))
-except: print(0)
-" 2>/dev/null || echo "?")
-    echo "  $TOTAL skill(s) loaded${NEW:+, $NEW new}"
-else
-    echo "  Skills manager not found"
+except: print(0)" 2>/dev/null || echo "?")
+    echo "  $TOTAL skill(s)${NEW:+, $NEW new}"
 fi
 
 # ── Memory ────────────────────────────────────────────────────────────────
@@ -95,27 +86,23 @@ if [ -x "$MEMORY" ]; then
 import sqlite3,os
 db=os.path.expanduser('~/.kiro/memory/memory.db')
 try: c=sqlite3.connect(db); print(c.execute('SELECT COUNT(*) FROM memories').fetchone()[0])
-except: print(0)
-" 2>/dev/null || echo "?")
-    echo "  $COUNT memories stored"
-    echo ""
-    echo "  Recent context:"
-    "$MEMORY" recent 2>/dev/null | head -20 || echo "  (empty)"
-    "$MEMORY" log "spawn" "v4 session=$SESSION" 2>/dev/null || true
+except: print(0)" 2>/dev/null || echo "?")
+    echo "  $COUNT memories"
+    "$MEMORY" recent 2>/dev/null | head -15 || true
+    "$MEMORY" log "spawn" "v5 session=$SESSION" 2>/dev/null || true
 fi
 
-# ── Follow-up suggestions ─────────────────────────────────────────────────
+# ── Auto-save now ─────────────────────────────────────────────────────────
+[ -x "$AUTOSAVE" ] && "$AUTOSAVE" save >/dev/null 2>&1 || true
+
+# ── Suggestions ───────────────────────────────────────────────────────────
 echo ""
 if [ -x "$SUGGEST" ]; then
-    "$SUGGEST" 2>/dev/null || true
+    SUGG_EN=$("$CONFIG" get suggest.on_spawn 2>/dev/null || echo "true")
+    [ "$SUGG_EN" = "true" ] && "$SUGGEST" 2>/dev/null || true
 fi
 
-# ── Health quick-check ────────────────────────────────────────────────────
-BAD=0
-for s in "$TOOLS"/nation-*.sh "$HOME/.kiro/hooks"/nation-*.sh \
-          "$TOOLS/papy"; do
-    [ -x "$s" ] || BAD=$((BAD+1))
-done
-[ $BAD -gt 0 ] && echo "" && echo "⚠ $BAD script(s) not executable — run: papy heal fix permissions"
+# ── TTS Welcome ───────────────────────────────────────────────────────────
+[ -x "$SPEECH" ] && "$SPEECH" welcome >/dev/null 2>&1 & true
 
 exit 0

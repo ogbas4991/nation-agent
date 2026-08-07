@@ -36,7 +36,7 @@ command -v node   &>/dev/null && ok "node"   || warn "node not found — install
 
 # ── Directories ───────────────────────────────────────────────────────────
 sec "Creating directories"
-for d in agents hooks tools prompts "skills/nation-tools" memory logs lib web build auto; do
+for d in agents hooks tools prompts "skills/nation-tools" memory logs lib web build auto "voice/models" "voice/samples" config whatsapp; do
     mkdir -p "$KIRO/$d"
 done
 ok "Directories under $KIRO/"
@@ -62,7 +62,9 @@ for t in nation-file nation-shell nation-git nation-search nation-python \
           nation-sqlite nation-browser nation-http nation-docker nation-ssh \
           nation-rest nation-memory nation-heal nation-adb nation-apk \
           nation-banner nation-skills nation-tui nation-web nation-apk-app \
-          nation-ollama nation-suggest nation-github nation-shizuku nation-auto; do
+          nation-ollama nation-suggest nation-github nation-shizuku nation-auto \
+          nation-deps nation-autosave nation-launch nation-msg nation-device \
+          nation-config nation-speech nation-voice; do
     dl "tools/${t}.sh" "$KIRO/tools/${t}.sh"
 done
 dl "tools/papy" "$KIRO/tools/papy"
@@ -124,6 +126,11 @@ if command -v git &>/dev/null; then
         git config --global user.email "user@localhost" && ok "git user.email set"
     git config --global init.defaultBranch main 2>/dev/null || true
 fi
+
+# ── Auto-install missing dependencies ────────────────────────────────────
+sec "Installing dependencies (non-stop)"
+"$KIRO/tools/nation-deps.sh" --silent core tts browser python node || true
+ok "Dependencies processed (failures are non-fatal)"
 
 # ── Health check ──────────────────────────────────────────────────────────
 sec "Health check"
