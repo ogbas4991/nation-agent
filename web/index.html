@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NATION AGENT Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;
+  --border:#30363d;--text:#c9d1d9;--dim:#8b949e;
+  --gold:#e3b341;--cyan:#58a6ff;--green:#3fb950;
+  --red:#f85149;--purple:#bc8cff;--orange:#ffa657;
+}
+body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;font-size:14px;min-height:100vh}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Layout */
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100}
+.logo{color:var(--gold);font-size:18px;font-weight:bold;letter-spacing:2px;white-space:nowrap}
+.logo span{color:var(--cyan)}
+.status-bar{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--dim)}
+.status-bar b{color:var(--text)}
+.header-time{margin-left:auto;color:var(--dim);font-size:12px;white-space:nowrap}
+
+.container{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 49px)}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px 0}
+.nav-item{display:block;padding:8px 20px;color:var(--dim);cursor:pointer;border-left:3px solid transparent;transition:.15s}
+.nav-item:hover{color:var(--text);background:var(--bg3)}
+.nav-item.active{color:var(--gold);border-left-color:var(--gold);background:var(--bg3)}
+.nav-section{padding:12px 20px 4px;color:var(--dim);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+
+.main{padding:20px;overflow:auto}
+.page{display:none}.page.active{display:block}
+.page-title{color:var(--gold);font-size:16px;font-weight:bold;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+.card-val{font-size:32px;font-weight:bold;color:var(--cyan)}
+.card-lbl{color:var(--dim);font-size:12px;margin-top:4px}
+.card.green .card-val{color:var(--green)}
+.card.gold  .card-val{color:var(--gold)}
+.card.purple .card-val{color:var(--purple)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg3);padding:8px 12px;text-align:left;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-all}
+tr:hover td{background:var(--bg3)}
+.tag{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;background:var(--bg3);border:1px solid var(--border)}
+.tag.fact{border-color:var(--cyan);color:var(--cyan)}
+.tag.error{border-color:var(--red);color:var(--red)}
+.tag.preference{border-color:var(--purple);color:var(--purple)}
+.tag.project{border-color:var(--green);color:var(--green)}
+.tag.task{border-color:var(--orange);color:var(--orange)}
+
+/* Terminal/output */
+.terminal{background:#000;border:1px solid var(--border);border-radius:6px;padding:12px;font-family:'Courier New',monospace;font-size:12px;white-space:pre-wrap;overflow:auto;max-height:400px;color:#00ff41}
+.output{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;white-space:pre-wrap;overflow:auto;max-height:350px;color:var(--text)}
+
+/* Forms */
+.form-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+input,select,textarea{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-family:inherit;font-size:13px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan)}
+input{flex:1;min-width:120px}
+textarea{width:100%;resize:vertical}
+.btn{padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:bold;transition:.15s}
+.btn-primary{background:var(--cyan);color:#000}
+.btn-primary:hover{opacity:.85}
+.btn-green{background:var(--green);color:#000}
+.btn-green:hover{opacity:.85}
+.btn-red{background:var(--red);color:#fff}
+.btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--cyan)}
+
+/* Misc */
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}
+.badge-ok{background:#238636;color:#fff}
+.badge-warn{background:#9e6a03;color:#fff}
+.badge-err{background:#da3633;color:#fff}
+.section{margin-bottom:24px}
+.section-title{color:var(--text);font-weight:bold;margin-bottom:8px;font-size:13px}
+.log-line{font-size:11px;padding:2px 0;border-bottom:1px solid var(--border)}
+.log-line:hover{background:var(--bg3)}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:600px){
+  .container{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .cards{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+
+<body>
+<div class="header">
+  <div class="logo">⚡ NATION <span>AGENT</span></div>
+  <div class="status-bar">
+    <span>Platform: <b id="s-platform">...</b></span>
+    <span>Tools: <b id="s-tools">...</b></span>
+    <span>Skills: <b id="s-skills">...</b></span>
+    <span>Memories: <b id="s-mem">...</b></span>
+  </div>
+  <div class="header-time" id="clock">...</div>
+</div>
+
+<div class="container">
+  <div class="sidebar">
+    <div class="nav-section">Dashboard</div>
+    <div class="nav-item active" data-page="overview">📊 Overview</div>
+    <div class="nav-section">Agent</div>
+    <div class="nav-item" data-page="memory">🧠 Memory</div>
+    <div class="nav-item" data-page="skills">📚 Skills</div>
+    <div class="nav-item" data-page="health">❤️ Health</div>
+    <div class="nav-section">Tools</div>
+    <div class="nav-item" data-page="terminal">💻 Terminal</div>
+    <div class="nav-item" data-page="http">🌐 HTTP</div>
+    <div class="nav-item" data-page="logs">📋 Logs</div>
+    <div class="nav-section">Mobile</div>
+    <div class="nav-item" data-page="apk">📱 APK Tools</div>
+  </div>
+
+  <div class="main">
+
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="page-title">Overview</div>
+      <div class="cards">
+        <div class="card"><div class="card-val" id="ov-tools">-</div><div class="card-lbl">Tool Scripts</div></div>
+        <div class="card green"><div class="card-val" id="ov-skills">-</div><div class="card-lbl">Skills</div></div>
+        <div class="card gold"><div class="card-val" id="ov-mem">-</div><div class="card-lbl">Memories</div></div>
+        <div class="card purple"><div class="card-val" id="ov-platform">-</div><div class="card-lbl">Platform</div></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Quick Actions</div>
+        <div class="form-row">
+          <button class="btn btn-primary" onclick="runHealth()">❤️ Health Check</button>
+          <button class="btn btn-green" onclick="showPage('memory')">🧠 Browse Memory</button>
+          <button class="btn btn-ghost" onclick="showPage('logs')">📋 View Logs</button>
+          <button class="btn btn-ghost" onclick="refreshAll()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Recent Memories</div>
+        <div id="ov-recent-mem"></div>
+      </div>
+    </div>
+
+    <!-- MEMORY -->
+    <div class="page" id="page-memory">
+      <div class="page-title">Memory Browser</div>
+      <div class="form-row">
+        <input id="mem-search" placeholder="Search memories..." oninput="searchMemory()">
+        <button class="btn btn-ghost" onclick="loadMemory()">🔄 Refresh</button>
+      </div>
+      <div class="section">
+        <div class="section-title">Add Memory</div>
+        <div class="form-row">
+          <select id="mem-type"><option>fact</option><option>preference</option><option>project</option><option>decision</option><option>task</option></select>
+          <input id="mem-key" placeholder="Key">
+          <input id="mem-val" placeholder="Value">
+          <button class="btn btn-primary" onclick="addMemory()">Add</button>
+        </div>
+      </div>
+      <table><thead><tr><th>Type</th><th>Key</th><th>Value</th><th>Updated</th></tr></thead>
+      <tbody id="mem-table"></tbody></table>
+    </div>
+
+    <!-- SKILLS -->
+    <div class="page" id="page-skills">
+      <div class="page-title">Skills Manager</div>
+      <div class="form-row">
+        <button class="btn btn-green" onclick="scanSkills()">🔍 Scan for new</button>
+        <button class="btn btn-ghost" onclick="loadSkills()">🔄 Refresh</button>
+      </div>
+      <div class="section" style="margin-top:12px">
+        <div class="section-title">Add Skill from URL</div>
+        <div class="form-row">
+          <input id="skill-name" placeholder="Skill name">
+          <input id="skill-url" placeholder="URL or file path">
+          <button class="btn btn-primary" onclick="addSkill()">Add</button>
+        </div>
+      </div>
+      <div id="skills-list"></div>
+    </div>
+
+    <!-- HEALTH -->
+    <div class="page" id="page-health">
+      <div class="page-title">Health Check</div>
+      <button class="btn btn-primary" onclick="runHealth()" style="margin-bottom:16px">▶ Run Health Check</button>
+      <div class="output" id="health-output">Click "Run Health Check" to start...</div>
+    </div>
+
+    <!-- TERMINAL -->
+    <div class="page" id="page-terminal">
+      <div class="page-title">Safe Terminal</div>
+      <p style="color:var(--dim);font-size:12px;margin-bottom:12px">Readonly commands only: ls, pwd, date, uname, echo, cat, df, free, python3/node/git --version</p>
+      <div class="form-row">
+        <input id="term-cmd" placeholder="Command..." onkeydown="if(event.key==='Enter')runCmd()">
+        <button class="btn btn-primary" onclick="runCmd()">▶ Run</button>
+      </div>
+      <div class="terminal" id="term-output">$ ready</div>
+    </div>
+
+    <!-- HTTP -->
+    <div class="page" id="page-http">
+      <div class="page-title">HTTP Request</div>
+      <div class="form-row">
+        <select id="http-method" style="width:90px;flex:none"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+        <input id="http-url" placeholder="https://...">
+        <button class="btn btn-primary" onclick="runHttp()">Send</button>
+      </div>
+      <textarea id="http-body" placeholder='{"key":"value"}  (POST/PUT/PATCH only)' style="height:80px;margin-bottom:8px"></textarea>
+      <div class="output" id="http-output">Response will appear here...</div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="page" id="page-logs">
+      <div class="page-title">Agent Logs</div>
+      <button class="btn btn-ghost" onclick="loadLogs()" style="margin-bottom:12px">🔄 Refresh</button>
+      <div id="logs-output" style="font-size:11px;font-family:monospace"></div>
+    </div>
+
+    <!-- APK -->
+    <div class="page" id="page-apk">
+      <div class="page-title">APK Tools</div>
+      <div class="section">
+        <div class="section-title">Check Dependencies</div>
+        <button class="btn btn-ghost" onclick="apkDeps()">Check build deps</button>
+      </div>
+      <div class="section" style="margin-top:16px">
+        <div class="section-title">New Project</div>
+        <div class="form-row">
+          <input id="apk-name" placeholder="App name">
+          <input id="apk-pkg" placeholder="com.example.app (optional)">
+          <button class="btn btn-primary" onclick="apkNew()">Create</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Build</div>
+        <div class="form-row">
+          <input id="apk-dir" placeholder="Project directory (default: .)">
+          <button class="btn btn-green" onclick="apkBuild()">Build APK</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Host / Serve APK</div>
+        <div class="form-row">
+          <input id="apk-host-path" placeholder="APK path or directory">
+          <input id="apk-host-port" placeholder="8080" style="width:80px;flex:none">
+          <button class="btn btn-ghost" onclick="apkHost()">Host</button>
+        </div>
+      </div>
+      <div class="output" id="apk-output">APK tool output will appear here...</div>
+    </div>
+
+  </div><!-- .main -->
+</div><!-- .container -->
+
+<script>
+const API = '';
+
+async function api(path, opts={}) {
+  const r = await fetch(API + path, opts);
+  return r.json().catch(()=>({error:'parse error'}));
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const p = document.getElementById('page-'+name);
+  const n = document.querySelector(`[data-page="${name}"]`);
+  if(p) p.classList.add('active');
+  if(n) n.classList.add('active');
+  if(name==='memory') loadMemory();
+  if(name==='skills') loadSkills();
+  if(name==='logs') loadLogs();
+}
+
+document.querySelectorAll('.nav-item').forEach(el=>{
+  el.addEventListener('click', ()=>showPage(el.dataset.page));
+});
+
+// Clock
+setInterval(()=>{
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+},1000);
+
+// Status
+async function refreshAll() {
+  const s = await api('/api/status');
+  document.getElementById('s-platform').textContent = s.platform||'?';
+  document.getElementById('s-tools').textContent = s.tools||'?';
+  document.getElementById('s-skills').textContent = s.skills||'?';
+  document.getElementById('s-mem').textContent = s.memories||'?';
+  document.getElementById('ov-tools').textContent = s.tools||'?';
+  document.getElementById('ov-skills').textContent = s.skills||'?';
+  document.getElementById('ov-mem').textContent = s.memories||'?';
+  document.getElementById('ov-platform').textContent = s.platform||'?';
+  loadRecentMem();
+}
+
+async function loadRecentMem() {
+  const data = await api('/api/memories');
+  const tbody = document.getElementById('ov-recent-mem');
+  if(!data||!data.length){tbody.innerHTML='<p style="color:var(--dim);font-size:12px">No memories yet.</p>';return;}
+  tbody.innerHTML = '<table><thead><tr><th>Type</th><th>Key</th><th>Value</th></tr></thead><tbody>' +
+    data.slice(0,5).map(m=>`<tr><td><span class="tag ${m.type}">${m.type}</span></td><td>${esc(m.key)}</td><td>${esc(m.value.slice(0,80))}</td></tr>`).join('') +
+    '</tbody></table>';
+}
+
+async function loadMemory() {
+  const data = await api('/api/memories');
+  renderMemTable(data);
+}
+
+function renderMemTable(data) {
+  const tbody = document.getElementById('mem-table');
+  if(!data||!data.length){tbody.innerHTML='<tr><td colspan="4" style="color:var(--dim)">No memories.</td></tr>';return;}
+  tbody.innerHTML = data.map(m=>`
+    <tr>
+      <td><span class="tag ${m.type}">${m.type}</span></td>
+      <td style="color:var(--cyan)">${esc(m.key)}</td>
+      <td>${esc(m.value.slice(0,120))}${m.value.length>120?'…':''}</td>
+      <td style="color:var(--dim);font-size:11px">${(m.updated||'').slice(0,16)}</td>
+    </tr>`).join('');
+}
+
+function searchMemory() {
+  const q = document.getElementById('mem-search').value.toLowerCase();
+  const rows = document.querySelectorAll('#mem-table tr');
+  rows.forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(q)?'':'none'; });
+}
+
+async function addMemory() {
+  const t=document.getElementById('mem-type').value;
+  const k=document.getElementById('mem-key').value.trim();
+  const v=document.getElementById('mem-val').value.trim();
+  if(!k||!v) return alert('Key and value required');
+  await api('/api/memory/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:t,key:k,value:v})});
+  document.getElementById('mem-key').value='';
+  document.getElementById('mem-val').value='';
+  loadMemory();
+}
+
+async function loadSkills() {
+  const data = await api('/api/skills');
+  const el = document.getElementById('skills-list');
+  const entries = Object.entries(data||{});
+  if(!entries.length){el.innerHTML='<p style="color:var(--dim);font-size:12px">No skills. Click "Scan for new".</p>';return;}
+  el.innerHTML = '<table><thead><tr><th>Name</th><th>Description</th><th>Source</th><th>Added</th></tr></thead><tbody>' +
+    entries.map(([n,i])=>`<tr><td style="color:var(--gold)">${esc(n)}</td><td>${esc(i.description||'')}</td><td style="color:var(--dim);font-size:11px">${esc((i.source||'').slice(0,40))}</td><td style="color:var(--dim);font-size:11px">${(i.added||'').slice(0,10)}</td></tr>`).join('') +
+    '</tbody></table>';
+}
+
+async function scanSkills() {
+  const r = await api('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:'skills',args:['scan']})});
+  alert(r.output||'Done');
+  loadSkills();
+}
+
+async function addSkill() {
+  const n=document.getElementById('skill-name').value.trim();
+  const u=document.getElementById('skill-url').value.trim();
+  if(!n||!u) return alert('Name and URL required');
+  const r = await api('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:'skills',args:['add',n,u]})});
+  alert(r.output||'Added');
+  document.getElementById('skill-name').value='';
+  document.getElementById('skill-url').value='';
+  loadSkills();
+}
+
+async function runHealth() {
+  showPage('health');
+  document.getElementById('health-output').textContent = 'Running...';
+  const r = await api('/api/health');
+  document.getElementById('health-output').textContent = r.output||'No output';
+}
+
+async function runCmd() {
+  const cmd = document.getElementById('term-cmd').value.trim();
+  if(!cmd) return;
+  const out = document.getElementById('term-output');
+  out.textContent += '\n$ ' + cmd + '\n';
+  const r = await api('/api/shell',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd})});
+  out.textContent += (r.output||r.error||'');
+  out.scrollTop = out.scrollHeight;
+  document.getElementById('term-cmd').value='';
+}
+
+async function runHttp() {
+  const method = document.getElementById('http-method').value;
+  const url = document.getElementById('http-url').value.trim();
+  const body = document.getElementById('http-body').value.trim();
+  if(!url) return;
+  const args = [method, url];
+  if(body) args.push(body);
+  const r = await api('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:'http',args})});
+  document.getElementById('http-output').textContent = r.output||'No response';
+}
+
+async function loadLogs() {
+  const r = await api('/api/logs');
+  const el = document.getElementById('logs-output');
+  el.innerHTML = (r.lines||[]).reverse().map(l=>`<div class="log-line">${esc(l.trim())}</div>`).join('');
+}
+
+async function apkDeps() { runApkTool(['deps']); }
+async function apkNew() {
+  const n=document.getElementById('apk-name').value.trim(); if(!n) return;
+  const p=document.getElementById('apk-pkg').value.trim();
+  runApkTool(p?['new',n,p]:['new',n]);
+}
+async function apkBuild() {
+  const d=document.getElementById('apk-dir').value.trim()||'.';
+  runApkTool(['build',d]);
+}
+async function apkHost() {
+  const p=document.getElementById('apk-host-path').value.trim(); if(!p) return;
+  const port=document.getElementById('apk-host-port').value.trim()||'8080';
+  runApkTool(['host',p,port]);
+}
+async function runApkTool(args) {
+  document.getElementById('apk-output').textContent = 'Running...';
+  const r = await api('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:'apk',args})});
+  document.getElementById('apk-output').textContent = r.output||r.error||'Done';
+}
+
+function esc(s){ const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
+
+// Init
+refreshAll();
+setInterval(refreshAll, 15000);
+</script>
+</body>
+</html>

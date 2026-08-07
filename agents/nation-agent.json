@@ -1,24 +1,15 @@
 {
   "name": "nation-agent",
-  "description": "Production-quality local-first AI coding agent for Termux. Self-healing, persistent memory, 11 tool modules, MCP bridge. Reads/edits files, automates tasks, runs shell commands, manages projects entirely on-device.",
+  "description": "NATION AGENT v3 — Self-healing, persistent memory, MCP bridge, cross-platform (Termux + Linux), APK build/deploy, TUI, web dashboard. Alias: papy.",
   "prompt": "file:///root/.kiro/prompts/nation-agent.txt",
 
   "tools": [
-    "read",
-    "write",
-    "shell",
-    "grep",
-    "glob",
-    "code",
-    "web_fetch",
-    "web_search"
+    "read", "write", "shell", "grep", "glob", "code",
+    "web_fetch", "web_search"
   ],
 
   "allowedTools": [
-    "read",
-    "grep",
-    "glob",
-    "code",
+    "read", "grep", "glob", "code",
     "@filesystem",
     "@filesystem/read_file",
     "@filesystem/list_directory",
@@ -29,100 +20,35 @@
   "toolsSettings": {
     "write": {
       "allowedPaths": [
-        "~/**",
-        "/root/**",
+        "~/**", "/root/**",
         "/data/data/com.termux/files/home/**"
       ],
-      "deniedPaths": [
-        "/etc/**",
-        "/sys/**",
-        "/proc/**",
-        "/dev/**"
-      ]
+      "deniedPaths": ["/etc/**", "/sys/**", "/proc/**", "/dev/**"]
     },
     "shell": {
       "allowedCommands": [
-        "git status",
-        "git diff",
-        "git log",
-        "git add",
-        "git commit",
-        "git branch",
-        "git checkout",
-        "git pull",
-        "git stash",
-        "git clone",
-        "git remote",
-        "git tag",
-        "git blame",
-        "git show",
-        "git init",
-        "git reset HEAD",
-        "python3",
-        "python",
-        "node",
-        "npm run",
-        "npm test",
-        "npm install",
-        "npm list",
-        "pip3",
-        "pip",
-        "ls",
-        "cat",
-        "head",
-        "tail",
-        "find",
-        "grep",
-        "sed",
-        "awk",
-        "echo",
-        "mkdir",
-        "cp",
-        "mv",
-        "chmod",
-        "touch",
-        "wc",
-        "sort",
-        "uniq",
-        "diff",
-        "which",
-        "env",
-        "export",
-        "date",
-        "uname",
-        "pwd",
-        "whoami",
-        "bash",
-        "sh",
-        "make",
-        "curl",
-        "pkg",
-        "apt",
-        "~/.kiro/tools/nation-"
+        "git", "python3", "python", "node", "npm", "pip3", "pip",
+        "ls", "cat", "head", "tail", "find", "grep", "sed", "awk",
+        "echo", "mkdir", "cp", "mv", "chmod", "touch", "wc", "sort",
+        "uniq", "diff", "which", "env", "export", "date", "uname",
+        "pwd", "whoami", "bash", "sh", "make", "curl", "pkg", "apt",
+        "~/.kiro/tools/",
+        "~/.kiro/tools/papy",
+        "/usr/local/bin/papy"
       ],
       "deniedCommands": [
-        "rm -rf /",
-        "rm -rf \\$HOME",
-        "dd if=",
-        "mkfs",
-        "chmod -R 777 /",
-        "> /dev/sda",
-        "git push --force",
-        "git reset --hard"
+        "rm -rf /", "rm -rf \\$HOME", "dd if=", "mkfs",
+        "chmod -R 777 /", "> /dev/sda",
+        "git push --force", "git reset --hard"
       ],
       "autoAllowReadonly": true,
       "denyByDefault": false
     },
     "web_fetch": {
       "trusted": [
-        ".*docs\\.python\\.org.*",
-        ".*nodejs\\.org.*",
-        ".*developer\\.mozilla\\.org.*",
-        ".*docs\\.npmjs\\.com.*",
-        ".*git-scm\\.com.*",
-        ".*github\\.com.*",
-        ".*stackoverflow\\.com.*",
-        ".*pypi\\.org.*",
+        ".*docs\\.python\\.org.*", ".*nodejs\\.org.*",
+        ".*developer\\.mozilla\\.org.*", ".*github\\.com.*",
+        ".*stackoverflow\\.com.*", ".*pypi\\.org.*",
         ".*httpbin\\.org.*"
       ]
     }
@@ -133,9 +59,7 @@
     "file://.gitignore",
     "file://package.json",
     "file://requirements.txt",
-    "file://pyproject.toml",
     "file://Makefile",
-    "file://Cargo.toml",
     "skill://.kiro/skills/nation-tools/SKILL.md"
   ],
 
@@ -143,7 +67,7 @@
     "agentSpawn": [
       {
         "command": "~/.kiro/hooks/nation-spawn.sh",
-        "timeout_ms": 15000
+        "timeout_ms": 20000
       }
     ],
     "preToolUse": [
@@ -177,13 +101,11 @@
     "github": {
       "command": "mcp-server-github",
       "args": [],
-      "env": {
-        "GITHUB_TOKEN": "$GITHUB_TOKEN"
-      },
+      "env": { "GITHUB_TOKEN": "$GITHUB_TOKEN" },
       "timeout": 30000
     }
   },
 
   "keyboardShortcut": "ctrl+shift+n",
-  "welcomeMessage": "NATION AGENT v2 online — self-healing, persistent memory, MCP bridge active. What are we building?"
+  "welcomeMessage": "⚡ NATION AGENT v3 online — type 'papy' anywhere to launch. Self-healing · Memory · MCP · APK · TUI · Web"
 }
