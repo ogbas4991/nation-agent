@@ -101,6 +101,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/health":
             out = run_tool("heal", "check")
             self.send_json({"output": out})
+        elif path == "/api/suggestions":
+            raw = run_tool("suggest", "--json")
+            try:
+                import json as _json
+                items = _json.loads(raw)
+                self.send_json({"suggestions": items})
+            except:
+                self.send_json({"suggestions": []})
         elif path in ("/", "/index.html"):
             html_path = os.path.join(WEB_DIR, "index.html")
             if os.path.isfile(html_path):
@@ -131,6 +139,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             value = body.get("value", "")
             out = run_tool("memory", "remember", mtype, key, value)
             self.send_json({"output": out})
+        elif path == "/api/exec":
+            # Execute a suggestion command (limited safe set)
+            cmd = body.get("cmd", "")
+            ALLOWED_PREFIXES = [
+                "papy ", "~/.kiro/tools/", "git ", "python3 ",
+                "npm ", "node ", "ls ", "cat ", "tail ", "df ", "free "
+            ]
+            BLOCKED = ["rm -rf", "dd if", "mkfs", "> /dev/", "git push --force"]
+            is_safe = any(cmd.startswith(p) for p in ALLOWED_PREFIXES)
+            is_blocked = any(b in cmd for b in BLOCKED)
+            if is_safe and not is_blocked:
+                try:
+                    r = subprocess.run(
+                        cmd, shell=True, capture_output=True, text=True, timeout=20,
+                        env={**os.environ, "PATH": os.environ.get("PATH","") + ":/usr/local/bin"}
+                    )
+                    self.send_json({"output": r.stdout + r.stderr, "exit": r.returncode})
+                except subprocess.TimeoutExpired:
+                    self.send_json({"output": "Timeout (20s)", "exit": 1})
+                except Exception as e:
+                    self.send_json({"output": str(e), "exit": 1})
+            else:
+                self.send_json({"error": "Command not allowed via web UI", "cmd": cmd}, 403)
         elif path == "/api/shell":
             cmd = body.get("cmd", "")
             # Safety: only allow safe readonly cmds via web

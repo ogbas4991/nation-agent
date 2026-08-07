@@ -86,6 +86,11 @@ textarea{width:100%;resize:vertical}
 .log-line:hover{background:var(--bg3)}
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
+.suggest-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;transition:.15s}
+.suggest-card:hover{border-color:var(--gold);background:var(--bg3)}
+.suggest-label{color:var(--gold);font-weight:bold;font-size:13px;min-width:180px}
+.suggest-cmd{color:var(--cyan);font-size:12px;font-family:'Courier New',monospace;flex:1;word-break:break-all}
+.suggest-btn{flex:none;white-space:nowrap}
 
 @media(max-width:600px){
   .container{grid-template-columns:1fr}
@@ -111,6 +116,7 @@ textarea{width:100%;resize:vertical}
   <div class="sidebar">
     <div class="nav-section">Dashboard</div>
     <div class="nav-item active" data-page="overview">📊 Overview</div>
+    <div class="nav-item" data-page="suggestions">💡 Suggestions</div>
     <div class="nav-section">Agent</div>
     <div class="nav-item" data-page="memory">🧠 Memory</div>
     <div class="nav-item" data-page="skills">📚 Skills</div>
@@ -146,6 +152,23 @@ textarea{width:100%;resize:vertical}
       <div class="section">
         <div class="section-title">Recent Memories</div>
         <div id="ov-recent-mem"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">💡 Suggestions <span style="color:var(--dim);font-size:11px;font-weight:normal">(click ▶ to run)</span></div>
+        <div id="ov-suggestions"><p style="color:var(--dim);font-size:12px">Loading...</p></div>
+        <div style="margin-top:8px"><button class="btn btn-ghost" style="font-size:12px" onclick="showPage('suggestions')">See all →</button></div>
+      </div>
+    </div>
+
+    <!-- SUGGESTIONS -->
+    <div class="page" id="page-suggestions">
+      <div class="page-title">💡 Suggestions</div>
+      <p style="color:var(--dim);font-size:12px;margin-bottom:16px">Click any suggestion to run it instantly.</p>
+      <button class="btn btn-ghost" onclick="loadSuggestions()" style="margin-bottom:16px">🔄 Refresh</button>
+      <div id="suggest-list"></div>
+      <div class="section" style="margin-top:20px">
+        <div class="section-title">Output</div>
+        <div class="output" id="suggest-output" style="min-height:80px">Click a suggestion to see output here...</div>
       </div>
     </div>
 
@@ -278,6 +301,7 @@ function showPage(name) {
   if(name==='memory') loadMemory();
   if(name==='skills') loadSkills();
   if(name==='logs') loadLogs();
+  if(name==='suggestions') loadSuggestions();
 }
 
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -301,6 +325,7 @@ async function refreshAll() {
   document.getElementById('ov-mem').textContent = s.memories||'?';
   document.getElementById('ov-platform').textContent = s.platform||'?';
   loadRecentMem();
+  loadOverviewSuggestions();
 }
 
 async function loadRecentMem() {
@@ -431,8 +456,66 @@ async function runApkTool(args) {
 
 function esc(s){ const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
 
+// Suggestions
+async function loadSuggestions() {
+  const el = document.getElementById('suggest-list');
+  el.innerHTML = '<p style="color:var(--dim)">Loading...</p>';
+  const data = await api('/api/suggestions');
+  const items = data.suggestions || [];
+  if (!items.length) {
+    el.innerHTML = '<p style="color:var(--dim)">No suggestions available.</p>';
+    return;
+  }
+  el.innerHTML = items.map((s, i) => `
+    <div class="suggest-card" id="sc-${i}">
+      <div class="suggest-label">${esc(s.label)}</div>
+      <div class="suggest-cmd">${esc(s.cmd)}</div>
+      <button class="btn btn-primary suggest-btn" onclick="runSuggestion(${i}, ${JSON.stringify(s.cmd)}, ${JSON.stringify(s.label)})">
+        ▶ Run
+      </button>
+    </div>`).join('');
+}
+
+async function runSuggestion(idx, cmd, label) {
+  const btn = document.querySelector(`#sc-${idx} .suggest-btn`);
+  const out = document.getElementById('suggest-output');
+  if (btn) { btn.textContent = '⏳ Running...'; btn.disabled = true; }
+  out.textContent = `$ ${cmd}\n\nRunning...`;
+  const r = await api('/api/exec', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({cmd})
+  });
+  out.textContent = `$ ${cmd}\n\n${r.output || r.error || 'Done'}`;
+  if (btn) { btn.textContent = '✓ Done'; btn.style.background = 'var(--green)'; }
+  setTimeout(() => {
+    if (btn) { btn.textContent = '▶ Run'; btn.disabled = false; btn.style.background = ''; }
+  }, 3000);
+  // Store in memory
+  api('/api/memory/add', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({type:'task', key:`ran.${Date.now()}`, value:`Web UI ran: ${label} — ${cmd}`})
+  });
+}
+
+// Also add suggestions to overview
+async function loadOverviewSuggestions() {
+  const data = await api('/api/suggestions');
+  const items = (data.suggestions || []).slice(0, 4);
+  const el = document.getElementById('ov-suggestions');
+  if (!el) return;
+  el.innerHTML = items.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="runSuggestion(-1, ${JSON.stringify(s.cmd)}, ${JSON.stringify(s.label)})" id="ovs-${i}">▶</button>
+      <span style="color:var(--gold);font-size:12px">${esc(s.label)}</span>
+      <span style="color:var(--dim);font-size:11px">${esc(s.cmd)}</span>
+    </div>`).join('');
+}
+
 // Init
 refreshAll();
+loadSuggestions();
 setInterval(refreshAll, 15000);
 </script>
 </body>
