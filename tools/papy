@@ -18,12 +18,10 @@ find_free_port() {
 }
 
 start_bg_services() {
-    # 1. Ollama
+    # 1. Ollama — ensure running in background (non-blocking check)
     if [ -x "$TOOLS/nation-ollama.sh" ]; then
-        curl -sf "http://localhost:$(cat "$NATION_DIR/ollama.port" 2>/dev/null || echo 11434)/api/tags" \
-            >/dev/null 2>&1 || {
+        "$TOOLS/nation-ollama.sh" status 2>/dev/null | grep -q "RUNNING" || \
             "$TOOLS/nation-ollama.sh" auto >/dev/null 2>&1 &
-        }
     fi
     # 2. AutoSave
     if [ -x "$TOOLS/nation-autosave.sh" ]; then
@@ -52,14 +50,38 @@ start_bg_services() {
 case "$CMD" in
   "")
     "$TOOLS/nation-banner.sh" full 2>/dev/null || true
+
+    # ── 1. Start Ollama (wait until ready) ──────────────────────────────
+    OLLAMA_SCRIPT="$TOOLS/nation-ollama.sh"
+    if [ -x "$OLLAMA_SCRIPT" ]; then
+        if ! "$OLLAMA_SCRIPT" status 2>/dev/null | grep -q "RUNNING"; then
+            echo -e "\033[38;5;214m◆\033[0m Starting Ollama..."
+            "$OLLAMA_SCRIPT" auto >/dev/null 2>&1
+            # Wait up to 10s
+            for i in $(seq 1 10); do
+                "$OLLAMA_SCRIPT" status 2>/dev/null | grep -q "RUNNING" && break
+                sleep 1
+            done
+        fi
+        "$OLLAMA_SCRIPT" status 2>/dev/null | grep -q "RUNNING" \
+            && echo -e "\033[38;5;82m✓\033[0m Ollama ready" \
+            || echo -e "\033[38;5;226m⚠\033[0m Ollama slow to start — continuing"
+    fi
+
+    # ── 2. Start background services ────────────────────────────────────
     start_bg_services
-    # TTS welcome
+
+    # ── 3. TTS welcome (non-blocking) ───────────────────────────────────
     [ -x "$TOOLS/nation-speech.sh" ] && \
         "$TOOLS/nation-speech.sh" welcome >/dev/null 2>&1 &
+
+    echo ""
+
+    # ── 4. Launch agent ─────────────────────────────────────────────────
     if command -v kiro-cli &>/dev/null; then
         exec kiro-cli chat --agent nation-agent
     else
-        echo "kiro-cli not found. Try: papy tui"
+        echo "kiro-cli not found. Launching TUI..."
         exec "$TOOLS/nation-tui.sh"
     fi
     ;;
