@@ -1,6 +1,6 @@
 {
   "name": "nation-agent",
-  "description": "Production-quality local-first AI coding agent for Termux. Reads and edits files, automates tasks, runs shell commands, and manages projects entirely on-device.",
+  "description": "Production-quality local-first AI coding agent for Termux. Self-healing, persistent memory, 11 tool modules, MCP bridge. Reads/edits files, automates tasks, runs shell commands, manages projects entirely on-device.",
   "prompt": "file:///root/.kiro/prompts/nation-agent.txt",
 
   "tools": [
@@ -18,7 +18,12 @@
     "read",
     "grep",
     "glob",
-    "code"
+    "code",
+    "@filesystem",
+    "@filesystem/read_file",
+    "@filesystem/list_directory",
+    "@filesystem/search_files",
+    "@filesystem/get_file_info"
   ],
 
   "toolsSettings": {
@@ -46,14 +51,22 @@
         "git checkout",
         "git pull",
         "git stash",
+        "git clone",
+        "git remote",
+        "git tag",
+        "git blame",
+        "git show",
+        "git init",
+        "git reset HEAD",
         "python3",
         "python",
         "node",
         "npm run",
         "npm test",
         "npm install",
-        "pip3 install",
-        "pip install",
+        "npm list",
+        "pip3",
+        "pip",
         "ls",
         "cat",
         "head",
@@ -82,17 +95,16 @@
         "bash",
         "sh",
         "make",
-        "cargo",
-        "rustc",
-        "pkg"
+        "curl",
+        "pkg",
+        "apt",
+        "~/.kiro/tools/nation-"
       ],
       "deniedCommands": [
         "rm -rf /",
         "rm -rf \\$HOME",
-        "rm -rf ~$",
         "dd if=",
         "mkfs",
-        ":.*\\{.*:.*\\|.*:.*&.*\\}.*:.*",
         "chmod -R 777 /",
         "> /dev/sda",
         "git push --force",
@@ -110,7 +122,8 @@
         ".*git-scm\\.com.*",
         ".*github\\.com.*",
         ".*stackoverflow\\.com.*",
-        ".*pypi\\.org.*"
+        ".*pypi\\.org.*",
+        ".*httpbin\\.org.*"
       ]
     }
   },
@@ -123,7 +136,7 @@
     "file://pyproject.toml",
     "file://Makefile",
     "file://Cargo.toml",
-    "skill://.kiro/skills/**/SKILL.md"
+    "skill://.kiro/skills/nation-tools/SKILL.md"
   ],
 
   "hooks": {
@@ -144,17 +157,33 @@
       {
         "matcher": "*",
         "command": "~/.kiro/hooks/nation-post-tool.sh",
-        "timeout_ms": 5000
+        "timeout_ms": 8000
       }
     ],
     "stop": [
       {
         "command": "~/.kiro/hooks/nation-stop.sh",
-        "timeout_ms": 5000
+        "timeout_ms": 8000
       }
     ]
   },
 
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcp-server-filesystem",
+      "args": ["/root", "/data/data/com.termux/files/home"],
+      "timeout": 30000
+    },
+    "github": {
+      "command": "mcp-server-github",
+      "args": [],
+      "env": {
+        "GITHUB_TOKEN": "$GITHUB_TOKEN"
+      },
+      "timeout": 30000
+    }
+  },
+
   "keyboardShortcut": "ctrl+shift+n",
-  "welcomeMessage": "NATION AGENT online. Local-first, fully on-device. What are we building?"
+  "welcomeMessage": "NATION AGENT v2 online — self-healing, persistent memory, MCP bridge active. What are we building?"
 }

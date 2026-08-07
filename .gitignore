@@ -7,6 +7,9 @@ logs/
 # Local settings (may contain tokens)
 settings/
 
+# Memory DB (contains conversation history - local only)
+memory/*.db
+
 # Misc
 *.log
 .DS_Store
