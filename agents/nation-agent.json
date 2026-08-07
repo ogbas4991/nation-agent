@@ -1,0 +1,160 @@
+{
+  "name": "nation-agent",
+  "description": "Production-quality local-first AI coding agent for Termux. Reads and edits files, automates tasks, runs shell commands, and manages projects entirely on-device.",
+  "prompt": "file:///root/.kiro/prompts/nation-agent.txt",
+
+  "tools": [
+    "read",
+    "write",
+    "shell",
+    "grep",
+    "glob",
+    "code",
+    "web_fetch",
+    "web_search"
+  ],
+
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "code"
+  ],
+
+  "toolsSettings": {
+    "write": {
+      "allowedPaths": [
+        "~/**",
+        "/root/**",
+        "/data/data/com.termux/files/home/**"
+      ],
+      "deniedPaths": [
+        "/etc/**",
+        "/sys/**",
+        "/proc/**",
+        "/dev/**"
+      ]
+    },
+    "shell": {
+      "allowedCommands": [
+        "git status",
+        "git diff",
+        "git log",
+        "git add",
+        "git commit",
+        "git branch",
+        "git checkout",
+        "git pull",
+        "git stash",
+        "python3",
+        "python",
+        "node",
+        "npm run",
+        "npm test",
+        "npm install",
+        "pip3 install",
+        "pip install",
+        "ls",
+        "cat",
+        "head",
+        "tail",
+        "find",
+        "grep",
+        "sed",
+        "awk",
+        "echo",
+        "mkdir",
+        "cp",
+        "mv",
+        "chmod",
+        "touch",
+        "wc",
+        "sort",
+        "uniq",
+        "diff",
+        "which",
+        "env",
+        "export",
+        "date",
+        "uname",
+        "pwd",
+        "whoami",
+        "bash",
+        "sh",
+        "make",
+        "cargo",
+        "rustc",
+        "pkg"
+      ],
+      "deniedCommands": [
+        "rm -rf /",
+        "rm -rf \\$HOME",
+        "rm -rf ~$",
+        "dd if=",
+        "mkfs",
+        ":.*\\{.*:.*\\|.*:.*&.*\\}.*:.*",
+        "chmod -R 777 /",
+        "> /dev/sda",
+        "git push --force",
+        "git reset --hard"
+      ],
+      "autoAllowReadonly": true,
+      "denyByDefault": false
+    },
+    "web_fetch": {
+      "trusted": [
+        ".*docs\\.python\\.org.*",
+        ".*nodejs\\.org.*",
+        ".*developer\\.mozilla\\.org.*",
+        ".*docs\\.npmjs\\.com.*",
+        ".*git-scm\\.com.*",
+        ".*github\\.com.*",
+        ".*stackoverflow\\.com.*",
+        ".*pypi\\.org.*"
+      ]
+    }
+  },
+
+  "resources": [
+    "file://README.md",
+    "file://.gitignore",
+    "file://package.json",
+    "file://requirements.txt",
+    "file://pyproject.toml",
+    "file://Makefile",
+    "file://Cargo.toml",
+    "skill://.kiro/skills/**/SKILL.md"
+  ],
+
+  "hooks": {
+    "agentSpawn": [
+      {
+        "command": "~/.kiro/hooks/nation-spawn.sh",
+        "timeout_ms": 15000
+      }
+    ],
+    "preToolUse": [
+      {
+        "matcher": "*",
+        "command": "~/.kiro/hooks/nation-pre-tool.sh",
+        "timeout_ms": 5000
+      }
+    ],
+    "postToolUse": [
+      {
+        "matcher": "*",
+        "command": "~/.kiro/hooks/nation-post-tool.sh",
+        "timeout_ms": 5000
+      }
+    ],
+    "stop": [
+      {
+        "command": "~/.kiro/hooks/nation-stop.sh",
+        "timeout_ms": 5000
+      }
+    ]
+  },
+
+  "keyboardShortcut": "ctrl+shift+n",
+  "welcomeMessage": "NATION AGENT online. Local-first, fully on-device. What are we building?"
+}

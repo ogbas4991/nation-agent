@@ -1,0 +1,12 @@
+# Session history - do not commit
+sessions/
+
+# Runtime logs
+logs/
+
+# Local settings (may contain tokens)
+settings/
+
+# Misc
+*.log
+.DS_Store
