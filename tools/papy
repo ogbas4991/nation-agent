@@ -1,111 +1,120 @@
 #!/bin/bash
-# NATION AGENT — papy launcher
-# The main entry point. Use 'papy' to interact with NATION AGENT from anywhere.
+# NATION AGENT — papy launcher v4
+# Main entry point. Starts Ollama, auto-switches ports, launches agent.
 #
 # Usage: papy [command] [args...]
-#
-# Commands (standalone, no kiro-cli needed):
-#   (none)           Launch kiro-cli chat with NATION AGENT
-#   tui              Open the TUI interface
-#   web [port]       Start the web dashboard
-#   banner           Show the banner
-#   health           Run health check
-#   memory [args]    Access memory system
-#   skills [args]    Manage skills
-#   heal [args]      Self-healing tools
-#   tool <name> ...  Run any nation tool directly
-#   status           Show agent status
-#   help             Show this help
-#
 NATION_DIR="${HOME}/.kiro"
 TOOLS="${NATION_DIR}/tools"
 LIB="${NATION_DIR}/lib"
 
-# Source platform lib
 [ -f "$LIB/nation-platform.sh" ] && source "$LIB/nation-platform.sh" 2>/dev/null || true
 
 CMD="${1:-}"
 
+# ── Auto port-finder (used by web/api servers) ────────────────────────────
+find_free_port() {
+    local port="${1:-7070}"
+    while ss -tlnp 2>/dev/null | grep -q ":$port " || \
+          netstat -tln 2>/dev/null | grep -q ":$port "; do
+        port=$((port + 1))
+        [ $port -gt 7200 ] && break
+    done
+    echo "$port"
+}
+
+# ── Start Ollama in background (non-blocking) ─────────────────────────────
+start_ollama_bg() {
+    if [ -x "$TOOLS/nation-ollama.sh" ]; then
+        # Only print if not already running
+        if ! curl -sf http://localhost:$(cat "$NATION_DIR/ollama.port" 2>/dev/null || echo 11434)/api/tags >/dev/null 2>&1; then
+            echo "Starting Ollama in background..."
+            "$TOOLS/nation-ollama.sh" auto >/dev/null 2>&1 &
+        fi
+    fi
+}
+
+# ── Shizuku/ADB check (non-blocking) ─────────────────────────────────────
+check_wireless() {
+    if [ -x "$TOOLS/nation-shizuku.sh" ]; then
+        "$TOOLS/nation-shizuku.sh" auto >/dev/null 2>&1 &
+    fi
+}
+
 case "$CMD" in
   "")
-    # Show banner then launch kiro-cli
+    # Full launch sequence
     "$TOOLS/nation-banner.sh" full 2>/dev/null || true
+    start_ollama_bg
+    check_wireless
     if command -v kiro-cli &>/dev/null; then
         exec kiro-cli chat --agent nation-agent
     else
-        echo "kiro-cli not found. Install from: https://kiro.dev"
-        echo ""
-        echo "Available papy commands:"
-        echo "  papy tui     - Terminal UI"
-        echo "  papy web     - Web dashboard"
-        echo "  papy health  - Health check"
-        exit 1
+        echo "kiro-cli not found. Try: papy tui"
+        exec "$TOOLS/nation-tui.sh"
     fi
     ;;
-  tui)
-    shift
-    exec "$TOOLS/nation-tui.sh" "$@"
-    ;;
+  tui)       shift; exec "$TOOLS/nation-tui.sh" "$@" ;;
   web)
     shift
-    exec "$TOOLS/nation-web.sh" "$@"
+    PORT=$(find_free_port "${1:-7070}")
+    [ "$PORT" != "${1:-7070}" ] && echo "Port ${1:-7070} busy — using $PORT"
+    exec "$TOOLS/nation-web.sh" "$PORT"
     ;;
-  banner)
-    shift
-    exec "$TOOLS/nation-banner.sh" "${1:-full}"
-    ;;
-  health)
-    exec "$TOOLS/nation-heal.sh" check
-    ;;
-  memory|mem)
-    shift
-    exec "$TOOLS/nation-memory.sh" "$@"
-    ;;
-  skills|skill)
-    shift
-    exec "$TOOLS/nation-skills.sh" "$@"
-    ;;
-  heal)
-    shift
-    exec "$TOOLS/nation-heal.sh" "$@"
-    ;;
-  adb)
-    shift
-    exec "$TOOLS/nation-adb.sh" "$@"
-    ;;
-  apk)
-    shift
-    exec "$TOOLS/nation-apk.sh" "$@"
-    ;;
+  banner)    shift; exec "$TOOLS/nation-banner.sh" "${1:-full}" ;;
+  health)    exec "$TOOLS/nation-heal.sh" check ;;
+  memory|mem) shift; exec "$TOOLS/nation-memory.sh" "$@" ;;
+  skills|skill) shift; exec "$TOOLS/nation-skills.sh" "$@" ;;
+  heal)      shift; exec "$TOOLS/nation-heal.sh" "$@" ;;
+  ollama)    shift; exec "$TOOLS/nation-ollama.sh" "$@" ;;
+  adb)       shift; exec "$TOOLS/nation-adb.sh" "$@" ;;
+  apk)       shift; exec "$TOOLS/nation-apk.sh" "$@" ;;
+  github|gh) shift; exec "$TOOLS/nation-github.sh" "$@" ;;
+  shizuku)   shift; exec "$TOOLS/nation-shizuku.sh" "$@" ;;
+  auto)      shift; exec "$TOOLS/nation-auto.sh" "$@" ;;
+  suggest)   shift; exec "$TOOLS/nation-suggest.sh" "$@" ;;
   tool)
     shift
     TOOL_NAME="${1:-}"
-    [ -n "$TOOL_NAME" ] || { echo "Usage: papy tool <name> [args...]"; echo "Tools: $(ls $TOOLS/nation-*.sh | xargs -I{} basename {} .sh | sed 's/nation-//' | tr '\n' ' ')"; exit 1; }
+    [ -n "$TOOL_NAME" ] || { echo "Usage: papy tool <name> [args...]"; exit 1; }
     shift
-    TOOL_SCRIPT="$TOOLS/nation-${TOOL_NAME}.sh"
-    [ -x "$TOOL_SCRIPT" ] || { echo "Tool not found: $TOOL_NAME"; exit 1; }
-    exec "$TOOL_SCRIPT" "$@"
+    SCRIPT="$TOOLS/nation-${TOOL_NAME}.sh"
+    [ -x "$SCRIPT" ] || { echo "Tool not found: $TOOL_NAME"; exit 1; }
+    exec "$SCRIPT" "$@"
     ;;
   status)
     "$TOOLS/nation-banner.sh" minimal 2>/dev/null || true
     echo ""
     "$TOOLS/nation-heal.sh" check 2>/dev/null
+    echo ""
+    echo "Ollama:" && "$TOOLS/nation-ollama.sh" status 2>/dev/null || echo "  not available"
     ;;
   update)
-    echo "Updating NATION AGENT from GitHub..."
     curl -fsSL https://raw.githubusercontent.com/ogbas4991/nation-agent/main/install.sh | bash
     ;;
   help|--help|-h)
     "$TOOLS/nation-banner.sh" minimal 2>/dev/null || true
     echo ""
-    grep '^#' "$0" | grep -v '#!/' | sed 's/^# //' | sed 's/^#//'
-    echo ""
-    echo "Available tools:"
-    ls "$TOOLS"/nation-*.sh 2>/dev/null | xargs -I{} basename {} .sh | sed 's/nation-/  papy tool /' | sort
+    cat << 'HELP'
+Usage: papy [command]
+
+  (none)          Launch NATION AGENT (kiro-cli + Ollama auto-start)
+  tui             Terminal UI with keyboard navigation
+  web [port]      Web dashboard (auto port-switch if busy)
+  status          Full system status
+  health          Health check
+  ollama [cmd]    Ollama model manager
+  memory [cmd]    Persistent memory
+  skills [cmd]    Skill registry
+  github [cmd]    GitHub auth & operations
+  shizuku [cmd]   Shizuku/ADB wireless
+  auto [cmd]      24/7 autonomous agent runner
+  suggest         Follow-up task suggestions
+  adb [cmd]       ADB device tools
+  apk [cmd]       APK build/deploy
+  heal [cmd]      Self-healing diagnostics
+  tool <name>     Run any nation-* tool
+  update          Update from GitHub
+HELP
     ;;
-  *)
-    echo "Unknown command: $CMD"
-    echo "Run: papy help"
-    exit 1
-    ;;
+  *) echo "Unknown: $CMD. Run: papy help"; exit 1 ;;
 esac

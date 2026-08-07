@@ -1,298 +1,413 @@
 #!/bin/bash
-# NATION AGENT — Terminal UI (TUI)
-# Full interactive terminal dashboard using dialog or pure bash fallback.
-# Usage: nation-tui.sh
-
+# NATION AGENT — TUI v4 with keyboard navigation
+# Arrow keys / vim keys (j/k), Enter to select, q to quit, ? for help
 source "$(dirname "$0")/../lib/nation-platform.sh" 2>/dev/null || true
 
 TOOLS="${NATION_TOOLS:-$HOME/.kiro/tools}"
-VERSION="3.0.0"
-TITLE="NATION AGENT v${VERSION}"
+VERSION="4.0.0"
 
-# ── Dialog availability ───────────────────────────────────────────────────
-USE_DIALOG=0
-command -v dialog &>/dev/null && USE_DIALOG=1
+# ── Colors ────────────────────────────────────────────────────────────────
+if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+    R=$'\033[0m' BOLD=$'\033[1m' DIM=$'\033[2m'
+    GOLD=$'\033[38;5;214m' CYAN=$'\033[38;5;51m' GREEN=$'\033[38;5;82m'
+    RED=$'\033[38;5;196m'  BLUE=$'\033[38;5;33m'  GRAY=$'\033[38;5;244m'
+    SEL_BG=$'\033[48;5;235m' SEL_FG=$'\033[38;5;214m'
+else
+    R='' BOLD='' DIM='' GOLD='' CYAN='' GREEN='' RED='' BLUE='' GRAY=''
+    SEL_BG='' SEL_FG=''
+fi
 
-# ── Helpers ───────────────────────────────────────────────────────────────
-tui_result() { cat /tmp/nation-tui-result 2>/dev/null; rm -f /tmp/nation-tui-result; }
-tui_input()  {
-    if [ $USE_DIALOG -eq 1 ]; then
-        dialog --inputbox "$1" 10 60 "${2:-}" 2>/tmp/nation-tui-result
-        return $?
-    else
-        echo -n "$1 " >&2
-        read -r line; echo "$line" > /tmp/nation-tui-result
-    fi
-}
-tui_msg() {
-    if [ $USE_DIALOG -eq 1 ]; then
-        dialog --msgbox "$1" 12 60
-    else
-        echo -e "\n$1\n"
-        read -rp "Press Enter..." _
-    fi
-}
-tui_confirm() {
-    if [ $USE_DIALOG -eq 1 ]; then
-        dialog --yesno "$1" 8 50
-        return $?
-    else
-        echo -n "$1 [y/N] " >&2
-        read -r ans
-        [[ "$ans" =~ ^[Yy]$ ]]
-    fi
-}
+# ── Terminal setup ────────────────────────────────────────────────────────
+ROWS=$(tput lines 2>/dev/null || echo 24)
+COLS=$(tput cols  2>/dev/null || echo 80)
 
-# ── Status bar content ────────────────────────────────────────────────────
-get_status() {
-    MEM=$(python3 -c "import sqlite3; c=sqlite3.connect('${HOME}/.kiro/memory/memory.db'); print(c.execute('SELECT COUNT(*) FROM memories').fetchone()[0])" 2>/dev/null || echo "?")
-    TOOLS_COUNT=$(ls "${TOOLS}"/nation-*.sh 2>/dev/null | wc -l | tr -d ' ')
-    SKILLS_COUNT=$(find "${HOME}/.kiro/skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
-    echo "Platform: ${NATION_PLATFORM:-?}  |  Tools: ${TOOLS_COUNT}  |  Skills: ${SKILLS_COUNT}  |  Memories: ${MEM}"
-}
+hide_cursor() { tput civis 2>/dev/null || true; }
+show_cursor() { tput cnorm 2>/dev/null || true; }
+clear_screen() { tput clear 2>/dev/null || clear; }
+move() { tput cup "$1" "$2" 2>/dev/null || true; }  # row col
+save_term() { stty -echo -icanon min 1 time 0 2>/dev/null || true; }
+restore_term() { stty sane 2>/dev/null || true; }
 
-# ── Pure bash fallback menu ───────────────────────────────────────────────
-bash_menu() {
-    while true; do
-        clear
-        "$TOOLS/nation-banner.sh" full 2>/dev/null || echo "=== NATION AGENT ==="
-        echo ""
-        STATUS=$(get_status)
-        echo "  $STATUS"
-        echo ""
-        echo "  ┌─────────────────────────────────────────┐"
-        echo "  │          NATION AGENT TUI Menu          │"
-        echo "  ├─────────────────────────────────────────┤"
-        echo "  │  1) Launch Agent (kiro-cli)             │"
-        echo "  │  2) Health Check                        │"
-        echo "  │  3) Memory Browser                      │"
-        echo "  │  4) Skills Manager                      │"
-        echo "  │  5) File Explorer                       │"
-        echo "  │  6) Git Dashboard                       │"
-        echo "  │  7) Run Python Code                     │"
-        echo "  │  8) HTTP Request                        │"
-        echo "  │  9) APK Tools                           │"
-        echo "  │  a) ADB / Device                        │"
-        echo "  │  w) Start Web Dashboard                 │"
-        echo "  │  l) View Logs                           │"
-        echo "  │  u) Update NATION AGENT                 │"
-        echo "  │  q) Quit                                │"
-        echo "  └─────────────────────────────────────────┘"
-        echo ""
-        read -rp "  Choose: " CHOICE
-        case "$CHOICE" in
-          1) bash_launch_agent ;;
-          2) clear; "$TOOLS/nation-heal.sh" check; read -rp "Press Enter..." _ ;;
-          3) bash_memory_menu ;;
-          4) bash_skills_menu ;;
-          5) bash_file_menu ;;
-          6) bash_git_menu ;;
-          7) bash_python_menu ;;
-          8) bash_http_menu ;;
-          9) bash_apk_menu ;;
-          a|A) clear; "$TOOLS/nation-adb.sh" devices 2>&1; read -rp "Press Enter..." _ ;;
-          w|W) "$TOOLS/nation-web.sh" & echo "Web dashboard started. PID: $!"; read -rp "Press Enter..." _ ;;
-          l|L) clear; tail -50 "${HOME}/.kiro/logs/nation-agent.log" 2>/dev/null || echo "No logs"; read -rp "Press Enter..." _ ;;
-          u|U) curl -fsSL https://raw.githubusercontent.com/ogbas4991/nation-agent/main/install.sh | bash; read -rp "Press Enter..." _ ;;
-          q|Q) echo "Goodbye."; exit 0 ;;
-          *) echo "Invalid choice." ;;
+cleanup() { restore_term; show_cursor; tput rmcup 2>/dev/null || true; echo ""; }
+trap cleanup EXIT INT TERM
+
+# ── Read a single keypress ────────────────────────────────────────────────
+read_key() {
+    local key
+    IFS= read -r -s -n1 key 2>/dev/null || true
+    # Handle escape sequences (arrow keys)
+    if [ "$key" = $'\x1b' ]; then
+        local seq
+        IFS= read -r -s -n2 seq -t 0.1 2>/dev/null || true
+        case "$seq" in
+            '[A') key="UP"   ;;
+            '[B') key="DOWN" ;;
+            '[C') key="RIGHT";;
+            '[D') key="LEFT" ;;
+            '[5') key="PGUP"; IFS= read -r -s -n1 -t 0.1 2>/dev/null || true ;;
+            '[6') key="PGDN"; IFS= read -r -s -n1 -t 0.1 2>/dev/null || true ;;
+            *) key="ESC" ;;
         esac
-    done
+    fi
+    echo "$key"
 }
 
-bash_launch_agent() {
+# ── Menu data ─────────────────────────────────────────────────────────────
+MENU_ITEMS=(
+    "🚀  Launch Agent (kiro-cli)"
+    "🤖  Ollama Status / Models"
+    "❤️   Health Check"
+    "🧠  Memory Browser"
+    "📚  Skills Manager"
+    "💡  Follow-up Suggestions"
+    "📁  File Explorer"
+    "🌿  Git Dashboard"
+    "🐍  Python Runner"
+    "🌐  HTTP Request"
+    "📱  APK Tools"
+    "🔌  ADB / Android"
+    "🔐  GitHub Auth"
+    "🛡️   Shizuku / Wireless ADB"
+    "🤖  Auto Agent (24/7)"
+    "🌍  Start Web Dashboard"
+    "📋  View Logs"
+    "⚙️   Settings"
+    "🔄  Update NATION AGENT"
+    "❓  Help"
+    "🚪  Quit"
+)
+
+MENU_ACTIONS=(
+    "launch_agent"
+    "ollama_menu"
+    "run_health"
+    "memory_menu"
+    "skills_menu"
+    "run_suggestions"
+    "file_menu"
+    "git_menu"
+    "python_menu"
+    "http_menu"
+    "apk_menu"
+    "adb_menu"
+    "github_menu"
+    "shizuku_menu"
+    "auto_menu"
+    "start_web"
+    "view_logs"
+    "settings_menu"
+    "do_update"
+    "show_help"
+    "do_quit"
+)
+
+TOTAL=${#MENU_ITEMS[@]}
+SELECTED=0
+PAGE_SIZE=$((ROWS - 12))
+[ $PAGE_SIZE -lt 5 ] && PAGE_SIZE=5
+
+# ── Status line ───────────────────────────────────────────────────────────
+get_status_line() {
+    local mem_count tools_count ollama_status
+    mem_count=$(python3 -c "import sqlite3; c=sqlite3.connect('$HOME/.kiro/memory/memory.db'); print(c.execute('SELECT COUNT(*) FROM memories').fetchone()[0])" 2>/dev/null || echo "?")
+    tools_count=$(ls "$TOOLS"/nation-*.sh 2>/dev/null | wc -l | tr -d ' ')
+    if curl -sf "http://localhost:$(cat $HOME/.kiro/ollama.port 2>/dev/null || echo 11434)/api/tags" >/dev/null 2>&1; then
+        ollama_status="${GREEN}●${R}"
+    else
+        ollama_status="${GRAY}●${R}"
+    fi
+    echo "Tools:${CYAN}${tools_count}${R} Mem:${CYAN}${mem_count}${R} Ollama:${ollama_status} Platform:${CYAN}${NATION_PLATFORM:-?}${R}"
+}
+
+# ── Draw the menu ─────────────────────────────────────────────────────────
+draw_menu() {
+    clear_screen
+    hide_cursor
+
+    # Header
+    move 0 0
+    echo -e "${GOLD}${BOLD}  ⚡ NATION AGENT v${VERSION}${R}  ${GRAY}$(date '+%H:%M:%S')${R}"
+    echo -e "${GRAY}$(printf '─%.0s' $(seq 1 $COLS))${R}"
+    echo -e "  $(get_status_line)"
+    echo -e "${GRAY}$(printf '─%.0s' $(seq 1 $COLS))${R}"
+    echo -e "  ${GRAY}↑/k up  ↓/j down  Enter select  gg top  G bottom  q quit  ? help${R}"
+    echo -e "${GRAY}$(printf '─%.0s' $(seq 1 $COLS))${R}"
+
+    # Calculate visible window
+    local page_start=$(( SELECTED / PAGE_SIZE * PAGE_SIZE ))
+    local page_end=$(( page_start + PAGE_SIZE ))
+    [ $page_end -gt $TOTAL ] && page_end=$TOTAL
+
+    local row=7
+    for ((i=page_start; i<page_end; i++)); do
+        move $row 0
+        if [ $i -eq $SELECTED ]; then
+            printf "${SEL_BG}${SEL_FG}${BOLD}  ▶ %-$((COLS-4))s${R}" "${MENU_ITEMS[$i]}"
+        else
+            printf "    ${GRAY}%-$((COLS-4))s${R}" "${MENU_ITEMS[$i]}"
+        fi
+        row=$((row+1))
+    done
+
+    # Footer
+    move $((ROWS-2)) 0
+    echo -e "${GRAY}$(printf '─%.0s' $(seq 1 $COLS))${R}"
+    move $((ROWS-1)) 0
+    printf "${GRAY}Item $((SELECTED+1))/$TOTAL  Page $((SELECTED/PAGE_SIZE+1))/$((( TOTAL + PAGE_SIZE - 1 ) / PAGE_SIZE))${R}"
+}
+
+# ── Action handlers ───────────────────────────────────────────────────────
+launch_agent() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
     if command -v kiro-cli &>/dev/null; then
         kiro-cli chat --agent nation-agent
     else
-        echo "kiro-cli not found. Install from: https://kiro.dev"
+        echo "kiro-cli not found."
         read -rp "Press Enter..." _
     fi
+    tput smcup 2>/dev/null || true
 }
 
-bash_memory_menu() {
+run_pager() {
+    local title="$1"; shift
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== $title ===${R}"
+    "$@" 2>&1 | head -80
+    echo ""
+    read -rp "Press Enter to return..." _
+    tput smcup 2>/dev/null || true
+    save_term
+}
+
+run_input_action() {
+    local prompt="$1"; local action="$2"
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== $prompt ===${R}"
+    read -rp "> " INPUT
+    if [ -n "$INPUT" ]; then
+        eval "$action \"$INPUT\"" 2>&1
+    fi
+    echo ""
+    read -rp "Press Enter to return..." _
+    tput smcup 2>/dev/null || true
+    save_term
+}
+
+ollama_menu()    { run_pager "Ollama" "$TOOLS/nation-ollama.sh" status; }
+run_health()     { run_pager "Health Check" "$TOOLS/nation-heal.sh" check; }
+run_suggestions(){ run_pager "Suggestions" "$TOOLS/nation-suggest.sh"; }
+start_web()      {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    PORT=$("$TOOLS/papy" web --get-port 2>/dev/null || echo 7070)
+    "$TOOLS/nation-web.sh" "$PORT" &
+    echo "Web dashboard started: http://localhost:$PORT (PID $!)"
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
+}
+view_logs()      { run_pager "Logs" tail -60 "$HOME/.kiro/logs/nation-agent.log"; }
+do_update()      { run_pager "Update" curl -fsSL https://raw.githubusercontent.com/ogbas4991/nation-agent/main/install.sh; }
+do_quit()        { cleanup; exit 0; }
+
+memory_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
     while true; do
-        clear
-        echo "=== Memory Browser ==="
-        echo "  1) Show recent memories"
-        echo "  2) Search memories"
-        echo "  3) Show summary"
-        echo "  4) Remember something"
-        echo "  5) Export memories"
-        echo "  b) Back"
-        read -rp "  Choose: " C
+        echo -e "${GOLD}=== Memory Browser ===${R}"
+        echo "  1) Recent   2) Search   3) Add   4) Summary   b) Back"
+        read -rp "  > " C
         case "$C" in
-          1) clear; "$TOOLS/nation-memory.sh" recent; read -rp "Press Enter..." _ ;;
-          2) read -rp "Search query: " Q; clear; "$TOOLS/nation-memory.sh" search "$Q"; read -rp "Press Enter..." _ ;;
-          3) clear; "$TOOLS/nation-memory.sh" summary; read -rp "Press Enter..." _ ;;
-          4) read -rp "Type (fact/preference/project): " T
-             read -rp "Key: " K
-             read -rp "Value: " V
-             "$TOOLS/nation-memory.sh" remember "$T" "$K" "$V"
-             read -rp "Press Enter..." _ ;;
-          5) OUT="${HOME}/.kiro/memory/export_$(date +%Y%m%d).json"
-             "$TOOLS/nation-memory.sh" export "$OUT"
-             echo "Exported to: $OUT"
-             read -rp "Press Enter..." _ ;;
-          b|B) return ;;
+          1) "$TOOLS/nation-memory.sh" recent 2>/dev/null | head -40 ;;
+          2) read -rp "Query: " Q; "$TOOLS/nation-memory.sh" search "$Q" 2>/dev/null ;;
+          3) read -rp "Type: " T; read -rp "Key: " K; read -rp "Value: " V
+             "$TOOLS/nation-memory.sh" remember "$T" "$K" "$V" ;;
+          4) "$TOOLS/nation-memory.sh" summary 2>/dev/null ;;
+          b|B|q) break ;;
         esac
-    done
-}
-
-bash_skills_menu() {
-    while true; do
-        clear
-        echo "=== Skills Manager ==="
-        echo "  1) List skills"
-        echo "  2) Scan for new skills"
-        echo "  3) Add skill (URL or file)"
-        echo "  4) Create new skill"
-        echo "  5) Update all remote skills"
-        echo "  b) Back"
-        read -rp "  Choose: " C
-        case "$C" in
-          1) clear; "$TOOLS/nation-skills.sh" list; read -rp "Press Enter..." _ ;;
-          2) clear; "$TOOLS/nation-skills.sh" scan; read -rp "Press Enter..." _ ;;
-          3) read -rp "Name: " N; read -rp "URL or path: " S
-             "$TOOLS/nation-skills.sh" add "$N" "$S"
-             read -rp "Press Enter..." _ ;;
-          4) read -rp "Name: " N; read -rp "Description: " D
-             "$TOOLS/nation-skills.sh" create "$N" "$D"
-             read -rp "Press Enter..." _ ;;
-          5) clear; "$TOOLS/nation-skills.sh" update-all; read -rp "Press Enter..." _ ;;
-          b|B) return ;;
-        esac
-    done
-}
-
-bash_file_menu() {
-    DIR="$PWD"
-    while true; do
-        clear
-        echo "=== File Explorer: $DIR ==="
-        "$TOOLS/nation-file.sh" list "$DIR" 2>/dev/null | head -30
         echo ""
-        echo "  1) Change directory   2) Read file   3) Create file"
-        echo "  4) Delete file        5) Find files  6) Search text"
-        echo "  b) Back"
-        read -rp "  Choose: " C
-        case "$C" in
-          1) read -rp "Directory: " D; [ -d "$D" ] && DIR="$D" || echo "Not found: $D"; sleep 1 ;;
-          2) read -rp "File path: " F; clear; "$TOOLS/nation-file.sh" read "$F" 2>/dev/null | head -100; read -rp "Press Enter..." _ ;;
-          3) read -rp "File path: " F; read -rp "Content: " CONTENT; "$TOOLS/nation-file.sh" write "$F" "$CONTENT"; read -rp "Press Enter..." _ ;;
-          4) read -rp "File path: " F; read -rp "Type --confirm to delete: " CONF; [ "$CONF" = "--confirm" ] && "$TOOLS/nation-file.sh" delete "$F" --confirm; read -rp "Press Enter..." _ ;;
-          5) read -rp "Pattern: " P; clear; "$TOOLS/nation-file.sh" find "$DIR" "$P"; read -rp "Press Enter..." _ ;;
-          6) read -rp "Pattern: " P; clear; "$TOOLS/nation-search.sh" text "$P" "$DIR" 2>/dev/null | head -30; read -rp "Press Enter..." _ ;;
-          b|B) return ;;
-        esac
     done
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
 }
 
-bash_git_menu() {
-    while true; do
-        clear
-        echo "=== Git Dashboard: $PWD ==="
-        "$TOOLS/nation-git.sh" status 2>/dev/null || echo "(not a git repo)"
-        echo ""
-        echo "  1) Log   2) Diff   3) Add all   4) Commit   5) Push   b) Back"
-        read -rp "  Choose: " C
-        case "$C" in
-          1) clear; "$TOOLS/nation-git.sh" log 15; read -rp "Press Enter..." _ ;;
-          2) clear; "$TOOLS/nation-git.sh" diff; read -rp "Press Enter..." _ ;;
-          3) "$TOOLS/nation-git.sh" add .; read -rp "Press Enter..." _ ;;
-          4) read -rp "Commit message: " M; "$TOOLS/nation-git.sh" commit "$M"; read -rp "Press Enter..." _ ;;
-          5) "$TOOLS/nation-git.sh" push; read -rp "Press Enter..." _ ;;
-          b|B) return ;;
-        esac
-    done
-}
-
-bash_python_menu() {
-    clear
-    echo "=== Python Execution ==="
-    echo "  1) Run inline code   2) Run file   3) Install package   b) Back"
-    read -rp "  Choose: " C
+skills_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== Skills ===${R}"
+    "$TOOLS/nation-skills.sh" list 2>/dev/null
+    echo ""; echo "  1) Scan   2) Add from URL   3) Create   b) Back"
+    read -rp "  > " C
     case "$C" in
-      1) read -rp "Python code: " CODE; clear; "$TOOLS/nation-python.sh" exec "$CODE"; read -rp "Press Enter..." _ ;;
-      2) read -rp "File path: " F; clear; "$TOOLS/nation-python.sh" run "$F"; read -rp "Press Enter..." _ ;;
-      3) read -rp "Package name: " P; "$TOOLS/nation-python.sh" pip install "$P"; read -rp "Press Enter..." _ ;;
-      b|B) return ;;
+      1) "$TOOLS/nation-skills.sh" scan ;;
+      2) read -rp "Name: " N; read -rp "URL: " U; "$TOOLS/nation-skills.sh" add "$N" "$U" ;;
+      3) read -rp "Name: " N; read -rp "Desc: " D; "$TOOLS/nation-skills.sh" create "$N" "$D" ;;
     esac
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
 }
 
-bash_http_menu() {
-    clear
-    echo "=== HTTP Request ==="
-    echo "  1) GET   2) POST   3) Check status   b) Back"
-    read -rp "  Choose: " C
+file_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== File Explorer: $PWD ===${R}"
+    ls -lah "$PWD" 2>/dev/null | head -30
+    echo ""; echo "  Enter path to read (or blank to return):"
+    read -rp "  > " F
+    [ -n "$F" ] && [ -f "$F" ] && cat "$F" 2>/dev/null | head -60
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
+}
+
+git_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== Git Dashboard ===${R}"
+    "$TOOLS/nation-git.sh" status 2>/dev/null || echo "(not a git repo)"
+    echo ""; echo "  1) Log   2) Diff   3) Add all   4) Commit   5) Push   b) Back"
+    read -rp "  > " C
     case "$C" in
-      1) read -rp "URL: " U; clear; "$TOOLS/nation-http.sh" get "$U"; read -rp "Press Enter..." _ ;;
-      2) read -rp "URL: " U; read -rp "JSON body: " B; clear; "$TOOLS/nation-http.sh" post "$U" "$B"; read -rp "Press Enter..." _ ;;
-      3) read -rp "URL: " U; "$TOOLS/nation-browser.sh" status "$U"; read -rp "Press Enter..." _ ;;
-      b|B) return ;;
+      1) "$TOOLS/nation-git.sh" log 15 2>/dev/null ;;
+      2) "$TOOLS/nation-git.sh" diff 2>/dev/null ;;
+      3) "$TOOLS/nation-git.sh" add . 2>/dev/null ;;
+      4) read -rp "Message: " M; "$TOOLS/nation-git.sh" commit "$M" 2>/dev/null ;;
+      5) "$TOOLS/nation-git.sh" push 2>/dev/null ;;
     esac
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
 }
 
-bash_apk_menu() {
-    clear
-    echo "=== APK Tools ==="
-    echo "  1) New project   2) Build   3) Host/serve APK   4) Deploy via ADB   5) Check deps   b) Back"
-    read -rp "  Choose: " C
+python_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== Python ===${R}"
+    echo "  1) Run code   2) Run file   3) Pip install   b) Back"
+    read -rp "  > " C
     case "$C" in
-      1) read -rp "App name: " N; "$TOOLS/nation-apk.sh" new "$N"; read -rp "Press Enter..." _ ;;
-      2) read -rp "Project dir (Enter for .): " D; D="${D:-.}"; "$TOOLS/nation-apk.sh" build "$D"; read -rp "Press Enter..." _ ;;
-      3) read -rp "APK path or dir: " P; read -rp "Port [8080]: " PORT; PORT="${PORT:-8080}"; "$TOOLS/nation-apk.sh" host "$P" "$PORT" & echo "Hosting at :$PORT (PID $!)"; read -rp "Press Enter..." _ ;;
-      4) read -rp "APK path: " P; "$TOOLS/nation-apk.sh" deploy "$P"; read -rp "Press Enter..." _ ;;
-      5) "$TOOLS/nation-apk.sh" deps; read -rp "Press Enter..." _ ;;
-      b|B) return ;;
+      1) read -rp "Code: " CODE; python3 -c "$CODE" 2>&1 ;;
+      2) read -rp "File: " F; python3 "$F" 2>&1 ;;
+      3) read -rp "Package: " P; pip3 install "$P" 2>&1 ;;
     esac
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
 }
 
-# ── Dialog-based menu (richer UI) ─────────────────────────────────────────
-dialog_menu() {
-    while true; do
-        CHOICE=$(dialog --clear --backtitle "$TITLE" \
-            --title "Main Menu" \
-            --menu "$(get_status)" 22 65 14 \
-            "1" "Launch Agent (kiro-cli)" \
-            "2" "Health Check" \
-            "3" "Memory Browser" \
-            "4" "Skills Manager" \
-            "5" "File Explorer" \
-            "6" "Git Dashboard" \
-            "7" "Run Python Code" \
-            "8" "HTTP Request" \
-            "9" "APK Tools" \
-            "a" "ADB / Android Device" \
-            "w" "Start Web Dashboard" \
-            "l" "View Logs" \
-            "u" "Update NATION AGENT" \
-            "q" "Quit" \
-            2>&1 >/dev/tty) || break
-
-        clear
-        case "$CHOICE" in
-          1) bash_launch_agent ;;
-          2) "$TOOLS/nation-heal.sh" check; read -rp "Press Enter..." _ ;;
-          3) bash_memory_menu ;;
-          4) bash_skills_menu ;;
-          5) bash_file_menu ;;
-          6) bash_git_menu ;;
-          7) bash_python_menu ;;
-          8) bash_http_menu ;;
-          9) bash_apk_menu ;;
-          a) "$TOOLS/nation-adb.sh" devices 2>&1; read -rp "Press Enter..." _ ;;
-          w) "$TOOLS/nation-web.sh" & echo "Web started. PID: $!"; read -rp "Press Enter..." _ ;;
-          l) tail -50 "${HOME}/.kiro/logs/nation-agent.log" 2>/dev/null; read -rp "Press Enter..." _ ;;
-          u) curl -fsSL https://raw.githubusercontent.com/ogbas4991/nation-agent/main/install.sh | bash; read -rp "Press Enter..." _ ;;
-          q) break ;;
-        esac
-    done
-    clear
+http_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== HTTP ===${R}"
+    echo "  1) GET   2) POST   3) Status check   b) Back"
+    read -rp "  > " C
+    case "$C" in
+      1) read -rp "URL: " U; "$TOOLS/nation-http.sh" get "$U" 2>&1 | head -40 ;;
+      2) read -rp "URL: " U; read -rp "Body JSON: " B; "$TOOLS/nation-http.sh" post "$U" "$B" 2>&1 | head -40 ;;
+      3) read -rp "URL: " U; "$TOOLS/nation-browser.sh" status "$U" 2>&1 ;;
+    esac
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
 }
 
-# ── Entry point ───────────────────────────────────────────────────────────
-if [ $USE_DIALOG -eq 1 ]; then
-    dialog_menu
-else
-    bash_menu
-fi
+apk_menu()     { run_pager "APK Tools" "$TOOLS/nation-apk.sh" deps; }
+adb_menu()     { run_pager "ADB Devices" "$TOOLS/nation-adb.sh" devices; }
+github_menu()  { run_pager "GitHub" "$TOOLS/nation-github.sh" status 2>/dev/null || echo "Run: papy github login"; }
+shizuku_menu() { run_pager "Shizuku" "$TOOLS/nation-shizuku.sh" status 2>/dev/null || echo "Shizuku not available"; }
+auto_menu()    { run_pager "Auto Agent" "$TOOLS/nation-auto.sh" status 2>/dev/null; }
+
+settings_menu() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    echo -e "${GOLD}=== Settings ===${R}"
+    echo "  1) Set Ollama default model"
+    echo "  2) Set GitHub token"
+    echo "  3) View agent config"
+    echo "  b) Back"
+    read -rp "  > " C
+    case "$C" in
+      1) read -rp "Model (e.g. llama3.2): " M; "$TOOLS/nation-ollama.sh" set-default "$M" ;;
+      2) read -rp "GitHub token (ghp_...): " T
+         echo "export GITHUB_TOKEN=$T" >> "$HOME/.bashrc"
+         "$TOOLS/nation-memory.sh" remember preference "github.token_set" "yes" 2>/dev/null || true
+         echo "Token saved to ~/.bashrc" ;;
+      3) cat "$HOME/.kiro/agents/nation-agent.json" 2>/dev/null | python3 -m json.tool | head -40 ;;
+    esac
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
+}
+
+show_help() {
+    restore_term; show_cursor; tput rmcup 2>/dev/null || true
+    cat << 'HELP'
+=== NATION AGENT TUI — Keyboard Navigation ===
+
+Navigation:
+  ↑ / k        Move up
+  ↓ / j        Move down
+  PgUp / u     Page up
+  PgDn / d     Page down
+  gg / Home    Jump to top
+  G  / End     Jump to bottom
+  Enter        Select item
+
+General:
+  q / Esc      Quit TUI
+  ?            Show this help
+  r            Refresh screen
+
+Quick access (anywhere):
+  papy tui     Open TUI
+  papy         Launch full agent
+  papy web     Web dashboard
+  papy health  Health check
+HELP
+    read -rp "Press Enter..." _
+    tput smcup 2>/dev/null || true
+    save_term
+}
+
+# ── Main event loop ───────────────────────────────────────────────────────
+tput smcup 2>/dev/null || true
+save_term
+PREV_G=0
+
+while true; do
+    draw_menu
+
+    KEY=$(read_key)
+
+    case "$KEY" in
+        # Movement
+        UP|k|K)
+            SELECTED=$(( SELECTED > 0 ? SELECTED - 1 : TOTAL - 1 ))
+            ;;
+        DOWN|j|J)
+            SELECTED=$(( SELECTED < TOTAL - 1 ? SELECTED + 1 : 0 ))
+            ;;
+        PGUP|u|U)
+            SELECTED=$(( SELECTED - PAGE_SIZE > 0 ? SELECTED - PAGE_SIZE : 0 ))
+            ;;
+        PGDN|d|D)
+            SELECTED=$(( SELECTED + PAGE_SIZE < TOTAL ? SELECTED + PAGE_SIZE : TOTAL - 1 ))
+            ;;
+        g)
+            if [ $PREV_G -eq 1 ]; then SELECTED=0; PREV_G=0
+            else PREV_G=1; fi
+            continue
+            ;;
+        G)   SELECTED=$((TOTAL - 1)) ;;
+        r|R) ;;  # just redraw
+        # Select
+        ""|$'\n'|$'\r')
+            ACTION="${MENU_ACTIONS[$SELECTED]}"
+            restore_term; show_cursor
+            "$ACTION" 2>/dev/null || true
+            save_term; hide_cursor
+            ;;
+        # Quit
+        q|Q|ESC)
+            cleanup; exit 0
+            ;;
+        "?")
+            show_help
+            ;;
+    esac
+    PREV_G=0
+done

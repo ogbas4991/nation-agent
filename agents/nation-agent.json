@@ -1,6 +1,6 @@
 {
   "name": "nation-agent",
-  "description": "NATION AGENT v3 — Self-healing, persistent memory, MCP bridge, cross-platform (Termux + Linux), APK build/deploy, TUI, web dashboard. Alias: papy.",
+  "description": "NATION AGENT v4 — Self-healing, persistent memory, MCP bridge, cross-platform (Termux + Linux), APK build/deploy, TUI, web dashboard, Ollama local AI, 24/7 auto-agent, Shizuku/ADB wireless. Alias: papy.",
   "prompt": "file:///root/.kiro/prompts/nation-agent.txt",
 
   "tools": [
@@ -32,9 +32,10 @@
         "echo", "mkdir", "cp", "mv", "chmod", "touch", "wc", "sort",
         "uniq", "diff", "which", "env", "export", "date", "uname",
         "pwd", "whoami", "bash", "sh", "make", "curl", "pkg", "apt",
+        "ollama", "adb",
         "~/.kiro/tools/",
-        "~/.kiro/tools/papy",
-        "/usr/local/bin/papy"
+        "/usr/local/bin/papy",
+        "papy"
       ],
       "deniedCommands": [
         "rm -rf /", "rm -rf \\$HOME", "dd if=", "mkfs",
@@ -46,10 +47,9 @@
     },
     "web_fetch": {
       "trusted": [
-        ".*docs\\.python\\.org.*", ".*nodejs\\.org.*",
-        ".*developer\\.mozilla\\.org.*", ".*github\\.com.*",
-        ".*stackoverflow\\.com.*", ".*pypi\\.org.*",
-        ".*httpbin\\.org.*"
+        ".*github\\.com.*", ".*stackoverflow\\.com.*",
+        ".*pypi\\.org.*", ".*docs\\.python\\.org.*",
+        ".*nodejs\\.org.*", ".*httpbin\\.org.*"
       ]
     }
   },
@@ -67,7 +67,7 @@
     "agentSpawn": [
       {
         "command": "~/.kiro/hooks/nation-spawn.sh",
-        "timeout_ms": 20000
+        "timeout_ms": 25000
       }
     ],
     "preToolUse": [
@@ -107,5 +107,5 @@
   },
 
   "keyboardShortcut": "ctrl+shift+n",
-  "welcomeMessage": "⚡ NATION AGENT v3 online — type 'papy' anywhere to launch. Self-healing · Memory · MCP · APK · TUI · Web"
+  "welcomeMessage": "⚡ NATION AGENT v4 — Ollama running, memory loaded, skills active. Type 'papy' anywhere. What are we building?"
 }
