@@ -179,3 +179,33 @@ echo $NATION_HAS_ADB   # 1 or 0
 - Run `papy heal diagnose "<error>"`
 - Check `papy health`
 - Retry with `papy heal retry "<cmd>"`
+
+## Device Control — Quick Reference
+
+Use `papy device <cmd>` for all Android/Linux device operations.
+
+| Command | What it does |
+|---|---|
+| `papy device info` | Full device snapshot (battery + wifi + model) |
+| `papy device battery` | Battery level, temp, charging state |
+| `papy device screen on/off/lock` | Wake, sleep, or lock screen |
+| `papy device brightness 0-255` | Set screen brightness (ADB) |
+| `papy device volume 0-15 [stream]` | Set volume — streams: music alarm ring notification |
+| `papy device wifi info/scan/on/off` | WiFi info, scan nearby, toggle (on/off needs ADB) |
+| `papy device bluetooth status/on/off` | Bluetooth state and toggle (on/off needs ADB) |
+| `papy device clipboard get/set "txt"` | Read or write clipboard |
+| `papy device camera photo [path]` | Take photo, saved as ~/nation_TIMESTAMP.jpg |
+| `papy device camera video` | Record screen video via ADB |
+| `papy device location` | GPS coordinates + Google Maps link |
+| `papy device contacts list` | List contacts |
+| `papy device contacts search "name"` | Search contacts |
+| `papy device sms list` | Last 20 SMS messages |
+| `papy device toast "msg"` | Show toast notification on screen |
+| `papy device input "text"` | Type text on device (ADB) |
+| `papy device keyevent <code>` | Send key: 3=home 4=back 24=vol+ 25=vol- 26=power |
+
+**Termux API** commands need Termux:API app + `pkg install termux-api`.
+**ADB** commands need wireless ADB via `papy shizuku pair` or USB debug.
+Commands fall back gracefully when tools are unavailable.
+
+Full one-liner list: `cat ~/.kiro/prompts/device-commands.txt`

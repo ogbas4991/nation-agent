@@ -1,0 +1,253 @@
+╔══════════════════════════════════════════════════════════════════╗
+║          NATION AGENT — DEVICE CONTROL USER GUIDE               ║
+║          papy device <command>  |  Updated: 2026-08-08          ║
+╚══════════════════════════════════════════════════════════════════╝
+
+WHAT IT DOES
+─────────────────────────────────────────────────────────────────
+Control your Android device from the terminal — brightness, volume,
+WiFi, Bluetooth, camera, clipboard, GPS, contacts, SMS, and more.
+
+Works through two channels:
+  • Termux API  — needs Termux:API app (most features)
+  • ADB         — needs wireless pairing via papy shizuku pair
+                  OR USB cable + USB debugging enabled
+
+Commands fall back gracefully. If a feature needs ADB and ADB isn't
+connected, it tells you exactly what's missing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SETUP (do this once)
+─────────────────────────────────────────────────────────────────
+
+Step 1 — Install Termux:API (for battery/wifi/camera/contacts/SMS):
+  Install the Termux:API app from F-Droid or GitHub releases
+  Then in Termux:
+    pkg install termux-api
+
+Step 2 — Connect ADB wirelessly (for brightness/wifi toggle/input):
+  Enable "Wireless debugging" in Android Developer Options, then:
+    papy shizuku pair <ip:port> <code>
+    e.g.  papy shizuku pair 192.168.1.5:39741 123456
+
+Step 3 — Verify everything works:
+    papy device info
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COMMANDS
+─────────────────────────────────────────────────────────────────
+
+── INFO ────────────────────────────────────────────────────────────
+
+  papy device info
+    Full snapshot: battery, WiFi, device model, Android version.
+
+  papy device battery
+    Shows: percentage, charging status, temperature, plugged type.
+    Example output:
+      percentage: 82
+      status: CHARGING
+      temperature: 29.5
+      plugged: AC
+
+
+── SCREEN ──────────────────────────────────────────────────────────
+
+  papy device screen on       Wake up the screen
+  papy device screen off      Put screen to sleep
+  papy device screen lock     Lock the screen (shows lock screen)
+
+  papy device brightness 0-255
+    Set screen brightness level.
+      0   = completely off (use carefully)
+      128 = about half
+      255 = full brightness
+    Requires: ADB
+    Example:  papy device brightness 200
+
+
+── VOLUME ──────────────────────────────────────────────────────────
+
+  papy device volume <level> [stream]
+    level  = 0 to 15
+    stream = music (default) | alarm | ring | notification
+
+  Examples:
+    papy device volume 10           Set music volume to 10
+    papy device volume 0 music      Mute music
+    papy device volume 15 alarm     Max alarm volume
+    papy device volume 5 ring       Set ringtone volume to 5
+    papy device volume 3 notification
+
+
+── WIFI ────────────────────────────────────────────────────────────
+
+  papy device wifi info
+    Shows: SSID, IP address, signal strength, frequency.
+
+  papy device wifi scan
+    Lists nearby networks with signal strength (dBm).
+    Requires: Termux:API
+
+  papy device wifi on             Enable WiFi  (requires ADB)
+  papy device wifi off            Disable WiFi (requires ADB)
+
+
+── BLUETOOTH ───────────────────────────────────────────────────────
+
+  papy device bluetooth status    Check if BT is available/on
+  papy device bluetooth on        Enable Bluetooth  (requires ADB)
+  papy device bluetooth off       Disable Bluetooth (requires ADB)
+
+
+── CLIPBOARD ───────────────────────────────────────────────────────
+
+  papy device clipboard get
+    Read whatever is currently in the clipboard.
+    Requires: Termux:API
+
+  papy device clipboard set "your text here"
+    Write text to clipboard. Useful for pasting into any app.
+    Requires: Termux:API
+
+  Example:
+    papy device clipboard set "Meeting at 3pm in Room B"
+
+
+── CAMERA ──────────────────────────────────────────────────────────
+
+  papy device camera photo
+    Capture a photo with the front camera.
+    Saved to: ~/nation_YYYYMMDD_HHMMSS.jpg
+    Requires: Termux:API
+
+  papy device camera photo /sdcard/myphoto.jpg
+    Save to a custom path.
+
+  papy device camera video
+    Record screen video via ADB screenrecord.
+    Press Ctrl+C to stop recording.
+    Requires: ADB
+
+
+── LOCATION ────────────────────────────────────────────────────────
+
+  papy device location
+    Get your GPS coordinates.
+    Output includes:
+      Lat: 40.7128
+      Lon: -74.0060
+      Alt: 10m
+      https://maps.google.com/?q=40.7128,-74.0060
+    Requires: Termux:API + Location permission granted
+
+
+── CONTACTS ────────────────────────────────────────────────────────
+
+  papy device contacts list
+    Show first 30 contacts (name + phone number).
+    Requires: Termux:API + Contacts permission
+
+  papy device contacts search "John"
+    Search by name. Case-insensitive.
+    Example:  papy device contacts search "mom"
+
+
+── SMS ─────────────────────────────────────────────────────────────
+
+  papy device sms list
+    Show last 20 SMS messages.
+    Shows: date, sender, first 60 chars of message.
+    Requires: Termux:API + SMS permission
+
+
+── NOTIFICATIONS ───────────────────────────────────────────────────
+
+  papy device toast "message"
+    Show a brief popup notification on the screen.
+    Works via Termux:API or notify-send (Linux).
+    Example:  papy device toast "Build complete!"
+
+
+── TEXT INPUT / KEY EVENTS ─────────────────────────────────────────
+
+  papy device input "text to type"
+    Types text as if using a keyboard.
+    Requires: ADB
+    Example:  papy device input "hello world"
+    Note: spaces become %s in the ADB command automatically.
+
+  papy device keyevent <code>
+    Send a hardware key press.
+    Requires: ADB
+
+    Common key codes:
+      3   HOME (go to home screen)
+      4   BACK
+      24  VOLUME UP
+      25  VOLUME DOWN
+      26  POWER (toggle screen on/off)
+      66  ENTER
+      82  MENU / LOCK
+      164 MUTE
+
+    Example:  papy device keyevent 3    (press Home)
+    Example:  papy device keyevent 26   (toggle power)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+QUICK CHEAT SHEET (copy-paste ready)
+─────────────────────────────────────────────────────────────────
+
+  papy device info                       # device snapshot
+  papy device battery                    # battery status
+  papy device screen on                  # wake screen
+  papy device screen off                 # sleep screen
+  papy device screen lock                # lock screen
+  papy device brightness 200             # set brightness
+  papy device volume 10                  # set music volume
+  papy device volume 0 ring              # silence ringer
+  papy device wifi info                  # wifi details
+  papy device wifi scan                  # scan networks
+  papy device wifi on                    # enable wifi (ADB)
+  papy device bluetooth status           # bt status
+  papy device clipboard get              # read clipboard
+  papy device clipboard set "text"       # write clipboard
+  papy device camera photo               # take photo
+  papy device location                   # GPS + maps link
+  papy device contacts list              # list contacts
+  papy device contacts search "name"     # find contact
+  papy device sms list                   # last 20 SMS
+  papy device toast "msg"                # show notification
+  papy device input "text"               # type text (ADB)
+  papy device keyevent 3                 # press HOME (ADB)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TROUBLESHOOTING
+─────────────────────────────────────────────────────────────────
+
+"Battery info not available"
+  → Install Termux:API app, then: pkg install termux-api
+  → Grant Battery permission to Termux:API in Android settings
+
+"WiFi control requires ADB" / "brightness requires ADB"
+  → Run: papy shizuku pair <ip:port> <code>
+  → Or connect USB cable with USB debugging enabled
+
+"Location not available"
+  → Enable Location permission for Termux:API in Android settings
+  → Make sure GPS is turned on
+
+"Camera not available"
+  → Grant Camera permission to Termux:API in Android settings
+
+"Contacts/SMS not available"
+  → Grant Contacts/SMS permission to Termux:API in Android settings
+
+Full one-liner list:
+  cat ~/.kiro/prompts/device-commands.txt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

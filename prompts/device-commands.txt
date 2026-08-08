@@ -1,0 +1,64 @@
+## DEVICE CONTROL — One-Line Commands
+## Tool: nation-device.sh  |  Alias: papy device <cmd>
+## Works on: Termux (termux-api) · ADB (wired/wireless) · Linux fallback
+
+# ── INFO ──────────────────────────────────────────────────────────────────
+papy device info                        # Full device info (battery + wifi + model)
+papy device battery                     # Battery level, status, temp, plugged state
+
+# ── SCREEN ───────────────────────────────────────────────────────────────
+papy device screen on                   # Wake screen
+papy device screen off                  # Sleep screen
+papy device screen lock                 # Lock screen
+papy device brightness 128              # Set brightness (0–255)  → needs ADB
+
+# ── VOLUME ───────────────────────────────────────────────────────────────
+papy device volume 10                   # Set music volume (0–15)
+papy device volume 5 alarm              # Set alarm volume
+papy device volume 8 ring               # Set ring volume
+papy device volume 0 music              # Mute music
+
+# ── WIFI ─────────────────────────────────────────────────────────────────
+papy device wifi info                   # Show SSID, IP, signal
+papy device wifi scan                   # Scan nearby networks
+papy device wifi on                     # Enable WiFi  → needs ADB
+papy device wifi off                    # Disable WiFi → needs ADB
+
+# ── BLUETOOTH ────────────────────────────────────────────────────────────
+papy device bluetooth status            # Check if BT is available/on
+papy device bluetooth on                # Enable Bluetooth → needs ADB
+papy device bluetooth off               # Disable Bluetooth → needs ADB
+
+# ── CLIPBOARD ────────────────────────────────────────────────────────────
+papy device clipboard get               # Read current clipboard content
+papy device clipboard set "your text"   # Write text to clipboard
+
+# ── CAMERA ───────────────────────────────────────────────────────────────
+papy device camera photo                # Capture photo → ~/nation_YYYYMMDD_HHMMSS.jpg
+papy device camera photo /sdcard/pic.jpg # Capture to custom path
+papy device camera video                # Record video via ADB screenrecord
+
+# ── LOCATION ─────────────────────────────────────────────────────────────
+papy device location                    # GPS coords + Google Maps link
+
+# ── CONTACTS ─────────────────────────────────────────────────────────────
+papy device contacts list               # List first 30 contacts
+papy device contacts search "John"      # Search contacts by name
+
+# ── SMS ──────────────────────────────────────────────────────────────────
+papy device sms list                    # Last 20 SMS messages
+
+# ── NOTIFICATIONS / INPUT ────────────────────────────────────────────────
+papy device toast "Hello world"         # Show on-screen toast message
+papy device input "search query"        # Type text on device (ADB)
+papy device keyevent 26                 # Send key: 26=power 3=home 4=back 24=vol+ 25=vol-
+
+# ── COMMON KEYEVENT CODES ────────────────────────────────────────────────
+# 3  = HOME        4  = BACK        24 = VOLUME UP
+# 25 = VOLUME DOWN 26 = POWER       66 = ENTER
+# 82 = MENU/LOCK   164 = MUTE
+
+# ── REQUIREMENTS ─────────────────────────────────────────────────────────
+# Termux API commands: needs Termux:API app + pkg install termux-api
+# ADB commands:        needs papy shizuku pair OR USB debug + adb connect
+# Both fallback gracefully if not available
