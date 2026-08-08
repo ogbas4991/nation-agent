@@ -174,27 +174,43 @@ install_kiro_cli() {
         *)             KIRO_ARCH="x64" ;;
     esac
 
-    # Try GitHub releases
-    KIRO_RELEASE_URL="https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-${OS}-${KIRO_ARCH}"
+    # Download from Nation Agent GitHub releases
+    RELEASE_BASE="https://github.com/ogbas4991/nation-agent/releases/download/v4.0.0"
 
-    step "Trying to download Kiro CLI for ${OS}/${ARCH}..."
-    if curl -fsSL "${KIRO_RELEASE_URL}" -o "$BIN_DIR/kiro-cli" 2>/dev/null; then
-        chmod +x "$BIN_DIR/kiro-cli"
-        ok "Kiro CLI installed to $BIN_DIR/kiro-cli"
-    else
-        # Fallback: npm install
-        warn "Binary download failed, trying npm..."
-        if command -v npm &>/dev/null; then
-            npm install -g @aws/kiro-cli 2>/dev/null && ok "Kiro CLI installed via npm" || {
-                err "npm install failed"
-                warn "Install Kiro CLI manually from: https://kiro.dev"
-                return 1
-            }
+    step "Downloading Kiro CLI binaries from Nation Agent releases..."
+
+    DOWNLOAD_OK=1
+    for BIN in kiro-cli kiro-cli-term kiro-cli-chat; do
+        if [ -f "$BIN_DIR/$BIN" ]; then
+            ok "$BIN already present, skipping"
+            continue
+        fi
+        step "Downloading $BIN..."
+        if curl -fsSL --progress-bar "${RELEASE_BASE}/${BIN}" -o "$BIN_DIR/$BIN"; then
+            chmod +x "$BIN_DIR/$BIN"
+            ok "$BIN installed"
         else
-            err "Cannot install Kiro CLI automatically."
-            warn "Please install npm first, then run: npm install -g @aws/kiro-cli"
-            warn "Or download from: https://kiro.dev"
-            return 1
+            err "$BIN download failed"
+            DOWNLOAD_OK=0
+        fi
+    done
+
+    # Also grab the q/qchat wrappers if missing
+    for WRAPPER in q qchat; do
+        if [ ! -f "$BIN_DIR/$WRAPPER" ]; then
+            echo '#!/bin/bash' > "$BIN_DIR/$WRAPPER"
+            echo 'exec "$HOME/.local/bin/kiro-cli-chat" "$@"' >> "$BIN_DIR/$WRAPPER"
+            chmod +x "$BIN_DIR/$WRAPPER"
+        fi
+    done
+
+    if [ $DOWNLOAD_OK -eq 0 ]; then
+        warn "Some binaries failed. Trying npm fallback..."
+        if command -v npm &>/dev/null; then
+            npm install -g @aws/kiro-cli 2>/dev/null && ok "Kiro CLI installed via npm" || \
+                warn "npm fallback also failed. Install manually: https://kiro.dev"
+        else
+            warn "Install Kiro CLI manually from: https://kiro.dev"
         fi
     fi
 
