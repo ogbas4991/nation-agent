@@ -1,158 +1,320 @@
 #!/bin/bash
-# NATION AGENT v3 — One-Line Installer
-# curl -fsSL https://raw.githubusercontent.com/ogbas4991/nation-agent/main/install.sh | bash
-set -euo pipefail
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  NATION AGENT — One-Shot Installer                                      ║
+# ║  Installs: Ollama + Kiro CLI + Nation Agent on Termux / Linux           ║
+# ║                                                                          ║
+# ║  Usage (one-liner):                                                      ║
+# ║    curl -fsSL https://raw.githubusercontent.com/YOUR_REPO/main/install.sh | bash
+# ║                                                                          ║
+# ║  Or locally:                                                             ║
+# ║    bash nation-install.sh                                                ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+set -uo pipefail
 
-REPO="https://raw.githubusercontent.com/ogbas4991/nation-agent/main"
-KIRO="$HOME/.kiro"
-BOLD='\033[1m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-ok()  { echo -e "${GREEN}[✓]${NC} $*"; }
-warn(){ echo -e "${YELLOW}[!]${NC} $*"; }
-err() { echo -e "${RED}[✗]${NC} $*" >&2; }
-sec() { echo -e "\n${BOLD}── $* ──${NC}"; }
+# ── Colors ────────────────────────────────────────────────────────────────
+NC='\033[0m'; BOLD='\033[1m'
+GREEN='\033[1;32m'; YELLOW='\033[1;33m'
+RED='\033[1;31m'; CYAN='\033[1;36m'; BLUE='\033[1;34m'
 
-# ── Detect platform ───────────────────────────────────────────────────────
-if [ -d "/data/data/com.termux" ]; then PLATFORM="termux"; PKG="pkg"
-elif [ -f "/etc/debian_version" ];  then PLATFORM="debian"; PKG="apt-get"
-elif [ -f "/etc/arch-release" ];    then PLATFORM="arch";   PKG="pacman -S --noconfirm"
-elif [ "$(uname)" = "Darwin" ];     then PLATFORM="macos";  PKG="brew"
-else PLATFORM="linux"; PKG="apt-get"; fi
+ok()      { echo -e "${GREEN}[✓]${NC} $*"; }
+warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
+err()     { echo -e "${RED}[✗]${NC} $*" >&2; }
+section() { echo -e "\n${BLUE}${BOLD}══ $* ══${NC}"; }
+step()    { echo -e "${CYAN}  →${NC} $*"; }
 
-echo ""
-echo -e "${BOLD}╔═══════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║     ⚡ NATION AGENT v3 Installer          ║${NC}"
-echo -e "${BOLD}║   Cross-Platform Local-First AI Agent     ║${NC}"
-echo -e "${BOLD}╚═══════════════════════════════════════════╝${NC}"
-echo -e "Platform: ${BOLD}$PLATFORM${NC}"
-echo ""
-
-# ── Requirements ──────────────────────────────────────────────────────────
-sec "Checking requirements"
-command -v curl   &>/dev/null && ok "curl" || { err "curl required. Install: $PKG install curl"; exit 1; }
-command -v bash   &>/dev/null && ok "bash"
-command -v python3 &>/dev/null && ok "python3 ($(python3 --version 2>&1 | cut -d' ' -f2))" || warn "python3 not found — install: $PKG install python"
-command -v git    &>/dev/null && ok "git"    || warn "git not found — install: $PKG install git"
-command -v node   &>/dev/null && ok "node"   || warn "node not found — install: $PKG install nodejs"
-
-# ── Directories ───────────────────────────────────────────────────────────
-sec "Creating directories"
-for d in agents hooks tools prompts "skills/nation-tools" memory logs lib web build auto "voice/models" "voice/samples" config whatsapp; do
-    mkdir -p "$KIRO/$d"
-done
-ok "Directories under $KIRO/"
-
-# ── Download files ────────────────────────────────────────────────────────
-sec "Downloading files"
-dl() {
-    local src="$1" dst="$2"
-    curl -fsSL "$REPO/$src" -o "$dst" 2>/dev/null && ok "$(basename $dst)" || { err "Failed: $src"; return 1; }
+# ── Platform detection ────────────────────────────────────────────────────
+detect_platform() {
+    if [ -d "/data/data/com.termux" ]; then
+        PLATFORM="termux"
+        PKG_MGR="pkg"
+        HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
+    elif [ -f "/etc/debian_version" ] || [ -f "/etc/ubuntu-release" ]; then
+        PLATFORM="debian"
+        PKG_MGR="apt-get"
+        HOME_DIR="$HOME"
+    elif uname -r 2>/dev/null | grep -qi "proot\|termux"; then
+        PLATFORM="termux-proot"
+        PKG_MGR="apt-get"
+        HOME_DIR="$HOME"
+    else
+        PLATFORM="linux"
+        PKG_MGR="apt-get"
+        HOME_DIR="$HOME"
+    fi
+    BIN_DIR="$HOME_DIR/.local/bin"
+    KIRO_DIR="$HOME_DIR/.kiro"
+    mkdir -p "$BIN_DIR" "$KIRO_DIR/logs"
 }
 
-dl "agents/nation-agent.json"         "$KIRO/agents/nation-agent.json"
-dl "prompts/nation-agent.txt"         "$KIRO/prompts/nation-agent.txt"
-dl "skills/nation-tools/SKILL.md"     "$KIRO/skills/nation-tools/SKILL.md"
-dl "lib/nation-platform.sh"           "$KIRO/lib/nation-platform.sh"
-dl "web/index.html"                   "$KIRO/web/index.html"
+# ── Package installer helper ──────────────────────────────────────────────
+pkg_install() {
+    case "$PLATFORM" in
+        termux)         pkg install -y "$@" 2>/dev/null ;;
+        termux-proot)   apt-get install -y "$@" 2>/dev/null || apt install -y "$@" 2>/dev/null ;;
+        debian|linux)   apt-get install -y "$@" 2>/dev/null || apt install -y "$@" 2>/dev/null ;;
+        *)              apt-get install -y "$@" 2>/dev/null || true ;;
+    esac
+}
 
-for h in nation-spawn nation-pre-tool nation-post-tool nation-stop; do
-    dl "hooks/${h}.sh" "$KIRO/hooks/${h}.sh"
-done
+# ── Ensure PATH contains ~/.local/bin ────────────────────────────────────
+ensure_path() {
+    for RC in "$HOME_DIR/.bashrc" "$HOME_DIR/.zshrc" "$HOME_DIR/.profile"; do
+        if [ -f "$RC" ] && ! grep -q 'local/bin' "$RC" 2>/dev/null; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC"
+            ok "Added ~/.local/bin to PATH in $RC"
+        fi
+    done
+    export PATH="$BIN_DIR:$PATH"
+}
 
-for t in nation-file nation-shell nation-git nation-search nation-python \
-          nation-sqlite nation-browser nation-http nation-docker nation-ssh \
-          nation-rest nation-memory nation-heal nation-adb nation-apk \
-          nation-banner nation-skills nation-tui nation-web nation-apk-app \
-          nation-ollama nation-suggest nation-github nation-shizuku nation-auto \
-          nation-deps nation-autosave nation-launch nation-msg nation-device \
-          nation-config nation-speech nation-voice \
-          nation-persist nation-clawhub nation-appdeploy; do
-    dl "tools/${t}.sh" "$KIRO/tools/${t}.sh"
-done
-dl "tools/papy" "$KIRO/tools/papy"
+# ── Step 1: Core deps ─────────────────────────────────────────────────────
+install_core_deps() {
+    section "Installing core dependencies"
 
-# ── Permissions ───────────────────────────────────────────────────────────
-sec "Setting permissions"
-chmod +x "$KIRO"/hooks/nation-*.sh
-chmod +x "$KIRO"/tools/nation-*.sh
-chmod +x "$KIRO/tools/papy"
-ok "All scripts executable"
+    local NEED=()
+    command -v curl   &>/dev/null || NEED+=("curl")
+    command -v wget   &>/dev/null || NEED+=("wget")
+    command -v git    &>/dev/null || NEED+=("git")
+    command -v unzip  &>/dev/null || NEED+=("unzip")
+    command -v python3 &>/dev/null || NEED+=("python3")
 
-# ── Install papy to PATH ──────────────────────────────────────────────────
-sec "Installing papy alias"
-PAPY_DEST=""
-for bin_dir in /usr/local/bin /usr/bin "$HOME/.local/bin" "${PREFIX:-}/bin"; do
-    if [ -d "$bin_dir" ] && [ -w "$bin_dir" ]; then
-        ln -sf "$KIRO/tools/papy" "$bin_dir/papy" 2>/dev/null && PAPY_DEST="$bin_dir/papy" && break
+    if [ ${#NEED[@]} -gt 0 ]; then
+        step "Installing: ${NEED[*]}"
+        pkg_install "${NEED[@]}" && ok "Core deps installed" || warn "Some core deps failed (continuing)"
+    else
+        ok "Core deps already present"
     fi
-done
+}
 
-if [ -n "$PAPY_DEST" ]; then
-    ok "papy installed at $PAPY_DEST"
-else
-    # Fallback: add to bashrc
-    grep -q "alias papy" "$HOME/.bashrc" 2>/dev/null || \
-        echo -e "\n# NATION AGENT\nalias papy='$KIRO/tools/papy'\nexport PATH=\"\$PATH:$KIRO/tools\"" >> "$HOME/.bashrc"
-    warn "papy alias added to ~/.bashrc (run: source ~/.bashrc)"
-fi
+# ── Step 2: Install Ollama ────────────────────────────────────────────────
+install_ollama() {
+    section "Installing Ollama"
 
-# ── Initialize memory ─────────────────────────────────────────────────────
-sec "Initializing memory"
-if command -v python3 &>/dev/null; then
-    "$KIRO/tools/nation-memory.sh" init && ok "Memory database ready"
-    "$KIRO/tools/nation-memory.sh" remember fact "install.platform" "$PLATFORM" 2>/dev/null || true
-    "$KIRO/tools/nation-memory.sh" remember fact "install.date" "$(date '+%Y-%m-%d')" 2>/dev/null || true
-else
-    warn "python3 not found — memory init skipped"
-fi
+    if command -v ollama &>/dev/null; then
+        ok "Ollama already installed: $(ollama --version 2>/dev/null | head -1)"
+        # Make sure it's running
+        if ! pgrep -x ollama &>/dev/null; then
+            step "Starting Ollama server..."
+            nohup ollama serve > "$KIRO_DIR/logs/ollama.log" 2>&1 &
+            sleep 2
+            ok "Ollama server started (PID: $!)"
+        else
+            ok "Ollama already running"
+        fi
+        return 0
+    fi
 
-# ── Scan skills ───────────────────────────────────────────────────────────
-sec "Registering skills"
-"$KIRO/tools/nation-skills.sh" scan && ok "Skills registered"
+    step "Downloading Ollama installer..."
 
-# ── Install MCP servers ───────────────────────────────────────────────────
-sec "Installing MCP servers"
-if command -v npm &>/dev/null; then
-    npm install -g @modelcontextprotocol/server-filesystem 2>&1 | tail -1 && ok "mcp-server-filesystem"
-    npm install -g @modelcontextprotocol/server-github 2>&1 | tail -1 && ok "mcp-server-github"
-else
-    warn "npm not found — MCP servers skipped. Install node: $PKG install nodejs"
-fi
+    # Try official install script first
+    if curl -fsSL https://ollama.com/install.sh | sh 2>/dev/null; then
+        ok "Ollama installed via official script"
+    else
+        # Fallback: manual binary install for Linux/Termux
+        warn "Official script failed, trying manual install..."
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            x86_64)  OLLAMA_ARCH="amd64" ;;
+            aarch64|arm64) OLLAMA_ARCH="arm64" ;;
+            armv7*)  OLLAMA_ARCH="arm" ;;
+            *)       err "Unsupported arch: $ARCH"; return 1 ;;
+        esac
 
-# ── Git config ────────────────────────────────────────────────────────────
-sec "Git configuration"
-if command -v git &>/dev/null; then
-    [ -n "$(git config --global user.name 2>/dev/null)" ] || \
-        git config --global user.name "nation-agent-user" && ok "git user.name set"
-    [ -n "$(git config --global user.email 2>/dev/null)" ] || \
-        git config --global user.email "user@localhost" && ok "git user.email set"
-    git config --global init.defaultBranch main 2>/dev/null || true
-fi
+        OLLAMA_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-${OLLAMA_ARCH}"
+        step "Downloading ollama binary for $ARCH..."
+        mkdir -p "$BIN_DIR"
+        if curl -fsSL "$OLLAMA_URL" -o "$BIN_DIR/ollama"; then
+            chmod +x "$BIN_DIR/ollama"
+            ok "Ollama binary installed to $BIN_DIR/ollama"
+        else
+            err "Ollama download failed. Install manually: https://ollama.com"
+            return 1
+        fi
+    fi
 
-# ── Auto-install missing dependencies ────────────────────────────────────
-sec "Installing dependencies (non-stop)"
-"$KIRO/tools/nation-deps.sh" --silent core tts browser python node || true
-ok "Dependencies processed (failures are non-fatal)"
+    # Start Ollama server
+    step "Starting Ollama server..."
+    nohup ollama serve > "$KIRO_DIR/logs/ollama.log" 2>&1 &
+    sleep 3
 
-# ── Health check ──────────────────────────────────────────────────────────
-sec "Health check"
-"$KIRO/tools/nation-heal.sh" check 2>&1 || true
+    if pgrep -x ollama &>/dev/null || curl -s http://localhost:11434/ &>/dev/null; then
+        ok "Ollama server running on :11434"
+    else
+        warn "Ollama may not be running yet. Start manually: ollama serve"
+    fi
 
-echo ""
-echo -e "${BOLD}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║   ⚡ NATION AGENT v3 — Install Complete!     ║${NC}"
-echo -e "${BOLD}╚══════════════════════════════════════════════╝${NC}"
-echo ""
-echo "Usage:"
-echo "  papy                    Launch agent"
-echo "  papy tui                Terminal UI"
-echo "  papy web                Web dashboard"
-echo "  papy session attach     Rejoin running session"
-echo "  papy clawhub browse     Browse ClawHub skills"
-echo "  papy appdeploy setup    Setup AppDeploy deployment"
-echo "  papy health             Health check"
-echo ""
-echo "  Ctrl+B D = detach session  |  Ctrl+B 1 = papy window"
-echo ""
-echo "GitHub: https://github.com/ogbas4991/nation-agent"
-echo ""
-[ -z "$PAPY_DEST" ] && echo -e "${YELLOW}Run: source ~/.bashrc  (to activate papy alias)${NC}\n"
+    # Pull a default model (small, fast)
+    step "Pulling default model (llama3.2:1b — ~1GB, small & fast)..."
+    if ollama pull llama3.2:1b 2>/dev/null; then
+        ok "Model llama3.2:1b ready"
+    else
+        warn "Model pull failed. Run later: ollama pull llama3.2:1b"
+    fi
+}
+
+# ── Step 3: Install Kiro CLI ──────────────────────────────────────────────
+install_kiro_cli() {
+    section "Installing Kiro CLI"
+
+    # Check if already installed
+    if command -v kiro-cli &>/dev/null; then
+        ok "Kiro CLI already installed: $(kiro-cli --version 2>/dev/null)"
+        return 0
+    fi
+
+    mkdir -p "$BIN_DIR"
+    ARCH=$(uname -m)
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+    # Map arch to Kiro CLI naming
+    case "$ARCH" in
+        x86_64)        KIRO_ARCH="x64" ;;
+        aarch64|arm64) KIRO_ARCH="arm64" ;;
+        armv7*)        KIRO_ARCH="armv7" ;;
+        *)             KIRO_ARCH="x64" ;;
+    esac
+
+    # Try GitHub releases
+    KIRO_RELEASE_URL="https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-${OS}-${KIRO_ARCH}"
+
+    step "Trying to download Kiro CLI for ${OS}/${ARCH}..."
+    if curl -fsSL "${KIRO_RELEASE_URL}" -o "$BIN_DIR/kiro-cli" 2>/dev/null; then
+        chmod +x "$BIN_DIR/kiro-cli"
+        ok "Kiro CLI installed to $BIN_DIR/kiro-cli"
+    else
+        # Fallback: npm install
+        warn "Binary download failed, trying npm..."
+        if command -v npm &>/dev/null; then
+            npm install -g @aws/kiro-cli 2>/dev/null && ok "Kiro CLI installed via npm" || {
+                err "npm install failed"
+                warn "Install Kiro CLI manually from: https://kiro.dev"
+                return 1
+            }
+        else
+            err "Cannot install Kiro CLI automatically."
+            warn "Please install npm first, then run: npm install -g @aws/kiro-cli"
+            warn "Or download from: https://kiro.dev"
+            return 1
+        fi
+    fi
+
+    # Verify
+    if command -v kiro-cli &>/dev/null; then
+        ok "Kiro CLI verified: $(kiro-cli --version 2>/dev/null)"
+    else
+        warn "kiro-cli not found in PATH. You may need to restart your terminal."
+        warn "PATH: $PATH"
+    fi
+}
+
+# ── Step 4: Setup Nation Agent ────────────────────────────────────────────
+setup_nation_agent() {
+    section "Setting up Nation Agent"
+
+    KIRO_TOOLS="$KIRO_DIR/tools"
+
+    if [ -d "$KIRO_TOOLS" ] && [ -f "$KIRO_TOOLS/papy" ]; then
+        ok "Nation Agent already installed at $KIRO_DIR"
+    else
+        warn "Nation Agent not found at $KIRO_DIR"
+        warn "Run the Nation Agent installer separately or clone the repo."
+        return 0
+    fi
+
+    # Make sure papy is in PATH
+    if [ ! -L "$BIN_DIR/papy" ] && [ ! -f "$BIN_DIR/papy" ]; then
+        ln -sf "$KIRO_TOOLS/papy" "$BIN_DIR/papy" 2>/dev/null || \
+            cp "$KIRO_TOOLS/papy" "$BIN_DIR/papy" && chmod +x "$BIN_DIR/papy"
+        ok "papy command linked to $BIN_DIR/papy"
+    else
+        ok "papy command already available"
+    fi
+
+    # Run nation-deps for core tools
+    if [ -f "$KIRO_TOOLS/nation-deps.sh" ]; then
+        step "Running dependency check..."
+        bash "$KIRO_TOOLS/nation-deps.sh" --silent core 2>/dev/null || true
+        ok "Dependencies checked"
+    fi
+
+    # Start autosave if available
+    if [ -f "$KIRO_TOOLS/nation-autosave.sh" ]; then
+        if ! pgrep -f "nation-autosave" &>/dev/null; then
+            step "Starting autosave daemon..."
+            nohup bash "$KIRO_TOOLS/nation-autosave.sh" start > /dev/null 2>&1 &
+            ok "Autosave daemon started"
+        else
+            ok "Autosave already running"
+        fi
+    fi
+}
+
+# ── Step 5: Shell RC setup ────────────────────────────────────────────────
+setup_shell() {
+    section "Configuring shell"
+
+    NATION_INIT_BLOCK='
+# ── NATION AGENT ──────────────────────────────────────────────────────────
+export PATH="$HOME/.local/bin:$PATH"
+export NATION_DIR="$HOME/.kiro"
+# Auto-start Ollama if not running (uncomment to enable)
+# pgrep -x ollama &>/dev/null || nohup ollama serve > ~/.kiro/logs/ollama.log 2>&1 &
+alias papy="$HOME/.kiro/tools/papy"
+alias nation="kiro-cli-chat --agent nation-agent"
+# ──────────────────────────────────────────────────────────────────────────'
+
+    for RC in "$HOME_DIR/.bashrc" "$HOME_DIR/.zshrc"; do
+        if [ -f "$RC" ] && ! grep -q 'NATION AGENT' "$RC" 2>/dev/null; then
+            echo "$NATION_INIT_BLOCK" >> "$RC"
+            ok "Nation Agent shell config added to $RC"
+        fi
+    done
+}
+
+# ── Summary ───────────────────────────────────────────────────────────────
+print_summary() {
+    echo ""
+    echo -e "${GREEN}${BOLD}╔══════════════════KeepAlive════════════════════╗${NC}"
+    echo -e "${GREEN}${BOLD}║       NATION AGENT — Install Complete!        ║${NC}"
+    echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  ${CYAN}Ollama${NC}     : $(command -v ollama &>/dev/null && echo "✓ $(ollama --version 2>/dev/null | head -1)" || echo "⚠ not found")"
+    echo -e "  ${CYAN}Kiro CLI${NC}   : $(command -v kiro-cli &>/dev/null && echo "✓ $(kiro-cli --version 2>/dev/null)" || echo "⚠ not found")"
+    echo -e "  ${CYAN}papy${NC}       : $(command -v papy &>/dev/null && echo "✓ ready" || echo "⚠ restart terminal")"
+    echo -e "  ${CYAN}Nation Dir${NC} : $KIRO_DIR"
+    echo ""
+    echo -e "  ${BOLD}To start Nation Agent:${NC}"
+    echo -e "    ${CYAN}kiro-cli-chat --agent nation-agent${NC}"
+    echo -e "  ${BOLD}Or shortcut:${NC}"
+    echo -e "    ${CYAN}nation${NC}   (after restarting terminal)"
+    echo ""
+    echo -e "  ${YELLOW}Restart your terminal (or run: source ~/.bashrc) to apply PATH changes.${NC}"
+    echo ""
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────
+main() {
+    echo -e "${BLUE}${BOLD}"
+    echo "  ███╗   ██╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗"
+    echo "  ████╗  ██║██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║"
+    echo "  ██╔██╗ ██║███████║   ██║   ██║██║   ██║██╔██╗ ██║"
+    echo "  ██║╚██╗██║██╔══██║   ██║   ██║██║   ██║██║╚██╗██║"
+    echo "  ██║ ╚████║██║  ██║   ██║   ██║╚██████╔╝██║ ╚████║"
+    echo "  ╚═╝  ╚═══╝╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝"
+    echo -e "  AGENT v4 — Auto Installer${NC}"
+    echo ""
+
+    detect_platform
+    echo -e "  Platform: ${CYAN}$PLATFORM${NC} | Home: ${CYAN}$HOME_DIR${NC}"
+    echo ""
+
+    ensure_path
+    install_core_deps
+    install_ollama
+    install_kiro_cli
+    setup_nation_agent
+    setup_shell
+    print_summary
+}
+
+main "$@"
